@@ -1,5 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────
-//  THE ONLY FILE YOU NEED TO EDIT TO CHANGE WHAT THE OVERLAY SHOWS.
+//  FALLBACK ONLY — you probably don't want to edit this file.
+//
+//  What the overlay shows is controlled by the `Overlay Config` table
+//  in Airtable (see poc-router/README.md). Edit that table and every
+//  BD's overlay follows within a minute, with no extension update.
+//
+//  This file is only used when the backend isn't reachable (demo mode)
+//  or the Overlay Config table doesn't exist yet. Editing it changes
+//  nothing for anyone until they reinstall the extension — which is
+//  exactly why the real config lives in Airtable.
 //
 //  Format is always:   "Label in the extension": "Exact Airtable column"
 //

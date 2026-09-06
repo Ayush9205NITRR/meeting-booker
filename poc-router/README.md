@@ -95,6 +95,64 @@ endpoint that only ever reads curated company data. Try DOMAIN first.
 
 ---
 
+## The `Overlay Config` table — what the overlay shows
+
+Create a table called **`Overlay Config`** in the same base
+(`app55PsyRKqkf2CAQ`). This is the control panel: add a row, and every BD's
+overlay picks it up within a minute. No extension update, no deploy, no
+developer.
+
+Columns (all plain text except where noted):
+
+| Column | Required | What it does |
+|---|---|---|
+| `Label` | no | What the BD sees. Blank falls back to the column name. |
+| `Column` | **yes** | The exact `Company List` column name to read. |
+| `Section` | **yes** | Where it appears — see below. |
+| `Order` | no | Number. Lower shows first. Blank sorts last, in table order. |
+| `Type` | no | `text` (default), `link`, `email`, `phone`. |
+| `Active` | no | Checkbox. Untick to hide a row without deleting it. |
+
+`Section` values:
+
+| Section | Appears as |
+|---|---|
+| `header` | The big company name at the top. Use one row. |
+| `subtitle` | The grey line under it. Use one row. |
+| `badge` | A coloured pill. Best for one status. |
+| `stat` | A number tile. Two or three max. |
+| `field` | A labelled row in the main list. |
+| `note` | Long text at the bottom, clamped with "Show more". |
+
+A starting point:
+
+| Label | Column | Section | Order |
+|---|---|---|---|
+| | Company Name | header | 1 |
+| | Industry | subtitle | 1 |
+| Stage | Highest Calling Stage | badge | 1 |
+| Revenue | Company Revenue | stat | 1 |
+| Rev / employee | Revenue Per Employee | stat | 2 |
+| Last interaction | Last Call | field | 1 |
+| Owner | Owner | field | 2 |
+
+### Things worth knowing
+
+- **Keep it short.** One badge, two or three tiles, four to six rows. The
+  overlay is a glance, not a report — everything you add competes with what's
+  already there.
+- **A wrong column name is harmless.** It's skipped silently rather than drawn
+  as an empty dash. To see the real names, click **Show all fields** at the
+  bottom of the overlay.
+- **Changes take up to a minute.** The layout is cached for 60 seconds
+  (`OVERLAY_CONFIG_TTL`) so the config table isn't re-read on every page view.
+- **If the table doesn't exist**, the overlay falls back to the defaults in
+  `extension/config/field-map.js`. Nothing breaks; you just don't get to
+  control it from Airtable.
+- **`Active` is all-or-nothing.** Airtable doesn't send unchecked checkboxes,
+  so if *no* row has `Active` ticked the column is treated as unused and
+  everything shows. Once any row is ticked, unticked rows hide.
+
 ## Endpoints
 
 | Request | Returns |

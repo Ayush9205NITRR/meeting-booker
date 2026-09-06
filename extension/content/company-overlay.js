@@ -1,11 +1,16 @@
 // Runs on https://app.kylas.io/sales/companies/details/<id>
 // Shows the curated Airtable "Company List" record for this Kylas company,
-// keyed by Kylas Company Id. What gets shown is entirely driven by
-// config/field-map.js — edit that file, not this one.
+// keyed by Kylas Company Id.
+//
+// What gets shown is decided by the `Overlay Config` table in Airtable and
+// arrives with each response as `layout`. The BD team edits that table and
+// every overlay follows within a minute — no extension rebuild.
+// config/field-map.js is only the fallback for when the backend isn't
+// configured yet (demo mode) or the config table doesn't exist.
 
 (function () {
   const COMPANY_PATH = /\/sales\/companies\/details\/(\d+)/;
-  const config = (window.KylasOverlayConfig && window.KylasOverlayConfig.company) || {};
+  const localConfig = (window.KylasOverlayConfig && window.KylasOverlayConfig.company) || {};
 
   let currentFields = {};
 
@@ -13,6 +18,39 @@
   function resolve(entry) {
     if (typeof entry === "string") return { field: entry, type: "text" };
     return { field: entry.field, type: entry.type || "text" };
+  }
+
+  // The server sends the layout already normalised. The local fallback is
+  // written for humans, so convert it into the same shape and let one
+  // renderer handle both.
+  function localLayout() {
+    const toList = (obj) =>
+      Object.entries(obj || {}).map(([label, entry]) => {
+        const { field, type } = resolve(entry);
+        return { label, column: field, type };
+      });
+
+    return {
+      header: localConfig.header || {},
+      badges: (localConfig.badges || []).map((column) => ({ label: column, column, type: "text" })),
+      stats: toList(localConfig.stats),
+      fields: toList(localConfig.fields),
+      notes: toList(localConfig.notes),
+    };
+  }
+
+  // A layout with nothing in it is worse than the built-in default, so
+  // only take the server's if it actually carries something to draw.
+  function pickLayout(response) {
+    const l = response.layout;
+    const hasContent =
+      l &&
+      ((l.badges || []).length ||
+        (l.stats || []).length ||
+        (l.fields || []).length ||
+        (l.notes || []).length ||
+        (l.header && l.header.name));
+    return hasContent ? l : localLayout();
   }
 
   function renderSkeleton(panel) {
@@ -28,28 +66,25 @@
     panel.setBody(`<div class="ko-error">${KylasOverlay.escapeHtml(message)}</div>`);
   }
 
-  function badgesHtml(fields) {
-    const badges = (config.badges || [])
-      .map((column) => fields[column])
+  function badgesHtml(fields, layout) {
+    const badges = (layout.badges || [])
+      .map((item) => fields[item.column])
       .filter((v) => v != null && String(v).trim())
       .map((v) => `<span class="ko-badge">${KylasOverlay.escapeHtml(v)}</span>`)
       .join("");
     return badges ? `<div class="ko-badges">${badges}</div>` : "";
   }
 
-  // Compact number tiles — POC counts and other at-a-glance figures.
-  // A zero is meaningful here ("nobody worked this account"), so unlike
-  // badges these render even when the value is 0.
-  function statsHtml(fields) {
-    const tiles = Object.entries(config.stats || {})
-      .map(([label, entry]) => {
-        const { field } = resolve(entry);
-        const raw = fields[field];
+  // Compact tiles for the headline figures — revenue, counts, and the like.
+  function statsHtml(fields, layout) {
+    const tiles = (layout.stats || [])
+      .map((item) => {
+        const raw = fields[item.column];
         if (raw == null || String(raw).trim() === "") return "";
         return `
           <div class="ko-stat">
             <div class="ko-stat-value">${KylasOverlay.escapeHtml(raw)}</div>
-            <div class="ko-stat-label">${KylasOverlay.escapeHtml(label)}</div>
+            <div class="ko-stat-label">${KylasOverlay.escapeHtml(item.label)}</div>
           </div>`;
       })
       .filter(Boolean)
@@ -57,40 +92,37 @@
     return tiles ? `<div class="ko-stats">${tiles}</div>` : "";
   }
 
-  function fieldsHtml(fields) {
-    const rows = Object.entries(config.fields || {})
+  function fieldsHtml(fields, layout) {
+    return (layout.fields || [])
       // A column the record doesn't have at all is a mapping mistake, not
       // data — drop the row entirely rather than filling the panel with
       // dashes. A column that exists but is blank still shows "—", because
       // "never called" is worth seeing.
-      .filter(([, entry]) => resolve(entry).field in fields)
-      .map(([label, entry]) => {
-        const { field, type } = resolve(entry);
-        const value = fields[field];
+      .filter((item) => item.column in fields)
+      .map((item) => {
+        const value = fields[item.column];
         const hasValue = value != null && String(value).trim();
         const copy = hasValue
           ? `<button class="ko-copy" data-value="${KylasOverlay.escapeHtml(value)}" title="Copy">⧉</button>`
           : "";
         return `
           <div class="ko-row">
-            <div class="ko-row-label">${KylasOverlay.escapeHtml(label)}</div>
-            <div class="ko-row-value">${KylasOverlay.renderValue(value, type)}</div>
+            <div class="ko-row-label">${KylasOverlay.escapeHtml(item.label)}</div>
+            <div class="ko-row-value">${KylasOverlay.renderValue(value, item.type)}</div>
             ${copy}
           </div>`;
       })
       .join("");
-    return rows;
   }
 
-  function notesHtml(fields) {
-    return Object.entries(config.notes || {})
-      .map(([label, entry]) => {
-        const { field } = resolve(entry);
-        const value = fields[field];
+  function notesHtml(fields, layout) {
+    return (layout.notes || [])
+      .map((item) => {
+        const value = fields[item.column];
         if (!value || !String(value).trim()) return "";
         return `
           <div class="ko-note">
-            <div class="ko-section-label">${KylasOverlay.escapeHtml(label)}</div>
+            <div class="ko-section-label">${KylasOverlay.escapeHtml(item.label)}</div>
             <div class="ko-note-body">
               <div class="ko-note-text ko-clamped">${KylasOverlay.escapeHtml(value)}</div>
             </div>
@@ -119,7 +151,8 @@
     const fields = response.company?.fields || {};
     currentFields = fields;
 
-    const headerConfig = config.header || {};
+    const layout = pickLayout(response);
+    const headerConfig = layout.header || {};
     const name = fields[headerConfig.name] || "Unknown company";
     const subtitleValue = fields[headerConfig.subtitle];
     panel.setHeader({
@@ -144,10 +177,10 @@
 
     panel.setBody(`
       ${notice}
-      ${badgesHtml(fields)}
-      ${statsHtml(fields)}
-      ${fieldsHtml(fields)}
-      ${notesHtml(fields)}
+      ${badgesHtml(fields, layout)}
+      ${statsHtml(fields, layout)}
+      ${fieldsHtml(fields, layout)}
+      ${notesHtml(fields, layout)}
       <div class="ko-footer">
         <button class="ko-ghost-btn" id="ko-toggle-raw">Show all fields</button>
         ${rawHtml(fields)}

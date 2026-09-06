@@ -40,6 +40,18 @@ const OVERLAY_AIRTABLE_TABLE = 'Company List';
 // mix them up.
 const OVERLAY_COMPANY_ID_FIELD = 'Kylas Company Id';
 
+// The table that decides what the overlay shows. Edited by the BD
+// team, not by developers — add a row, every BD sees the new field
+// within OVERLAY_CONFIG_TTL seconds. No redeploy, no extension update.
+// If this table is missing, the extension falls back to the defaults
+// baked into its own config/field-map.js.
+const OVERLAY_CONFIG_TABLE = 'Overlay Config';
+
+// How long a layout is cached before Airtable is re-read. Keep it
+// short enough that an edit feels immediate, long enough that the
+// config table isn't hit on every single page view.
+const OVERLAY_CONFIG_TTL = 60;
+
 // A company id known to exist, used only by overlaySelfTest().
 const OVERLAY_SELFTEST_COMPANY_ID = '1778327';
 
@@ -96,8 +108,123 @@ function overlayCompany_(companyId) {
       id: id,
       recordId: record ? record.id : null,
       fields: record ? record.fields : {}
-    }
+    },
+    // null when the Overlay Config table is absent — the extension
+    // then renders using its own built-in defaults.
+    layout: overlayLayout_()
   };
+}
+
+// ============ LAYOUT — read from the Overlay Config table ============
+
+/**
+ * Turns the Overlay Config table into the shape the extension renders.
+ * Cached briefly so a page view costs one Airtable call, not two.
+ *
+ * Returns null (not an error) if the table doesn't exist, so a missing
+ * config degrades to the extension's defaults instead of a blank panel.
+ */
+function overlayLayout_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('overlayLayout');
+  if (cached) {
+    const parsed = JSON.parse(cached);
+    return parsed.missing ? null : parsed;
+  }
+
+  let rows;
+  try {
+    rows = overlayAirtableAll_(OVERLAY_CONFIG_TABLE);
+  } catch (err) {
+    // Table not created yet — cache the miss so we don't retry per view.
+    cache.put('overlayLayout', JSON.stringify({ missing: true }), OVERLAY_CONFIG_TTL);
+    return null;
+  }
+
+  const layout = overlayBuildLayout_(rows);
+  cache.put('overlayLayout', JSON.stringify(layout), OVERLAY_CONFIG_TTL);
+  return layout;
+}
+
+function overlayBuildLayout_(rows) {
+  const layout = { header: {}, badges: [], stats: [], fields: [], notes: [] };
+
+  // Airtable omits an unchecked checkbox from the response entirely, so
+  // "Active unchecked" and "no Active column" arrive looking identical.
+  // If any row has it set, the column exists and blanks mean off; if no
+  // row does, the column isn't in use and everything is on.
+  const usesActive = rows.some(function (r) {
+    return r.Active !== undefined && r.Active !== '';
+  });
+
+  rows
+    .filter(function (r) {
+      if (!usesActive) return true;
+      return r.Active === true || r.Active === 'true';
+    })
+    .map(function (r, i) {
+      return {
+        label:   String(r.Label || '').trim(),
+        column:  String(r.Column || '').trim(),
+        section: String(r.Section || '').trim().toLowerCase(),
+        type:    String(r.Type || 'text').trim().toLowerCase() || 'text',
+        order:   r.Order === undefined || r.Order === '' ? 1e9 : Number(r.Order),
+        seq:     i
+      };
+    })
+    .filter(function (r) { return r.column && r.section; })
+    // Stable sort: Order wins, original row order breaks ties.
+    .sort(function (a, b) { return (a.order - b.order) || (a.seq - b.seq); })
+    .forEach(function (r) {
+      const entry = { label: r.label || r.column, column: r.column, type: r.type };
+      switch (r.section) {
+        case 'header':
+          layout.header.name = r.column;
+          break;
+        case 'subtitle':
+          layout.header.subtitle = r.column;
+          layout.header.subtitleType = r.type;
+          break;
+        case 'badge': layout.badges.push(entry); break;
+        case 'stat':  layout.stats.push(entry);  break;
+        case 'field': layout.fields.push(entry); break;
+        case 'note':  layout.notes.push(entry);  break;
+        default: break;   // unknown section, ignore rather than break the panel
+      }
+    });
+
+  return layout;
+}
+
+/** Every row of a table, following Airtable's pagination. */
+function overlayAirtableAll_(tableName) {
+  const out = [];
+  let offset = '';
+
+  do {
+    const url = 'https://api.airtable.com/v0/' + OVERLAY_AIRTABLE_BASE + '/' +
+                encodeURIComponent(tableName) + '?pageSize=100' +
+                (offset ? '&offset=' + encodeURIComponent(offset) : '');
+
+    const res = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { Authorization: 'Bearer ' + overlayAirtablePat_() },
+      muteHttpExceptions: true
+    });
+
+    const code = res.getResponseCode();
+    if (code !== 200) {
+      throw new Error('Airtable returned ' + code + ' for table ' + tableName);
+    }
+
+    const parsed = JSON.parse(res.getContentText());
+    (parsed.records || []).forEach(function (rec) {
+      out.push(overlayFlatten_(rec.fields || {}));
+    });
+    offset = parsed.offset || '';
+  } while (offset);
+
+  return out;
 }
 
 function overlayAirtablePat_() {
@@ -183,6 +310,25 @@ function overlaySelfTest() {
   const props = PropertiesService.getScriptProperties();
   Logger.log('AIRTABLE_PAT set:  ' + (props.getProperty('AIRTABLE_PAT') ? 'yes' : 'NO — set it first'));
   Logger.log('OVERLAY_TOKEN set: ' + (props.getProperty('OVERLAY_TOKEN') ? 'yes' : 'no (deployment must be DOMAIN-restricted)'));
+  Logger.log('');
+
+  // The Overlay Config table is optional, so report on it separately —
+  // its absence is a fallback, not a failure.
+  try {
+    const layout = overlayLayout_();
+    if (!layout) {
+      Logger.log('Overlay Config table: not found — the extension will use its built-in defaults.');
+    } else {
+      Logger.log('Overlay Config table: ' +
+        (layout.header.name ? '1 header, ' : 'NO header row, ') +
+        layout.badges.length + ' badge, ' +
+        layout.stats.length + ' stat, ' +
+        layout.fields.length + ' field, ' +
+        layout.notes.length + ' note row(s)');
+    }
+  } catch (err) {
+    Logger.log('Overlay Config table: FAILED — ' + err.message);
+  }
   Logger.log('');
 
   try {
