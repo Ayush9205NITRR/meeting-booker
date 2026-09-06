@@ -1,0 +1,3 @@
+# The Airtable token. Copy secrets.example.js to secrets.js and fill it in.
+# Never commit the real one.
+extension/config/secrets.js

@@ -23,6 +23,13 @@ const AIRTABLE_DEFAULTS = {
   airtableIdColumn: "Kylas Company Id",
 };
 
+// config/secrets.js is gitignored and optional. When it's present the
+// whole team is configured by shipping the folder — nobody types a
+// token. A token set in the popup still wins, for testing.
+function bundledPat() {
+  return (self.KylasOverlaySecrets && self.KylasOverlaySecrets.airtablePat) || "";
+}
+
 async function airtableSettings() {
   const stored = await chrome.storage.sync.get([
     "airtablePat",
@@ -31,7 +38,7 @@ async function airtableSettings() {
     "airtableIdColumn",
   ]);
   return {
-    pat: (stored.airtablePat || "").trim(),
+    pat: (stored.airtablePat || bundledPat() || "").trim(),
     baseId: (stored.airtableBaseId || AIRTABLE_DEFAULTS.airtableBaseId).trim(),
     table: (stored.airtableTable || AIRTABLE_DEFAULTS.airtableTable).trim(),
     idColumn: (stored.airtableIdColumn || AIRTABLE_DEFAULTS.airtableIdColumn).trim(),

@@ -28,6 +28,15 @@
 //
 // Every response is JSON: { ok: true, ...} or { ok: false, error: "..." }.
 
+// Optional — present only if someone has created config/secrets.js from
+// the example. importScripts throws on a missing file, so this is the
+// one place a try/catch is the right tool.
+try {
+  importScripts("/config/secrets.js");
+} catch (e) {
+  // No bundled token; the popup's value (or demo data) takes over.
+}
+
 importScripts("airtable.js");
 
 const MOCK_MODE_NOTICE =

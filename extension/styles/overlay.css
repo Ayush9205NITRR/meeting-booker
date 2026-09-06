@@ -14,6 +14,13 @@
   box-sizing: border-box;
 }
 
+/* An author `display` rule beats the UA stylesheet's [hidden]{display:none},
+   so .ko-panel{display:flex} would keep the panel visible even with the
+   hidden attribute set. This has to win outright. */
+[hidden] {
+  display: none !important;
+}
+
 .ko-panel {
   width: 352px;
   height: 100vh;
@@ -23,35 +30,39 @@
   border-left: 1px solid var(--ko-line);
   box-shadow: -8px 0 28px rgba(16, 20, 36, 0.1);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 13px;
+  font-size: 14.5px;
   line-height: 1.45;
   color: var(--ko-ink);
   overflow: hidden;
   pointer-events: auto;
 }
 
-/* Slim tab left behind when the rail is closed. */
+/* The floating icon. This is the resting state — the panel only opens
+   when a BD clicks it, so Kylas is never covered uninvited. */
 .ko-launcher {
   position: absolute;
   top: 50%;
-  right: 0;
+  right: 18px;
   transform: translateY(-50%);
-  width: 26px;
-  height: 62px;
-  border: 1px solid var(--ko-line);
-  border-right: none;
-  border-radius: 10px 0 0 10px;
-  background: var(--ko-surface);
-  color: var(--ko-accent);
-  font-size: 16px;
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--ko-accent), #7c6cf6);
+  color: #fff;
+  font-size: 21px;
+  font-weight: 700;
   font-family: inherit;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: -4px 0 14px rgba(16, 20, 36, 0.1);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.42);
   pointer-events: auto;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
 }
 
 .ko-launcher:hover {
-  background: var(--ko-accent-soft);
+  transform: translateY(-50%) scale(1.07);
+  box-shadow: 0 8px 26px rgba(79, 70, 229, 0.52);
 }
 
 /* ── header ─────────────────────────────────────────────── */
@@ -72,7 +83,7 @@
   border-radius: 10px;
   background: linear-gradient(135deg, var(--ko-accent), #7c6cf6);
   color: #fff;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 650;
   letter-spacing: 0.02em;
   display: flex;
@@ -86,7 +97,7 @@
 }
 
 .ko-title {
-  font-size: 14.5px;
+  font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -95,7 +106,7 @@
 }
 
 .ko-subtitle {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ko-ink-3);
   white-space: nowrap;
   overflow: hidden;
@@ -156,7 +167,7 @@
 }
 
 .ko-badge {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 550;
   padding: 3px 9px;
   border-radius: 999px;
@@ -184,7 +195,7 @@
 }
 
 .ko-stat-value {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 650;
   line-height: 1.15;
   color: var(--ko-ink);
@@ -193,7 +204,7 @@
 }
 
 .ko-stat-label {
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -216,7 +227,7 @@
 }
 
 .ko-row-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -225,7 +236,7 @@
 }
 
 .ko-row-value {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--ko-ink);
   word-break: break-word;
   padding-right: 26px;
@@ -281,7 +292,7 @@
   border: 1px solid var(--ko-line);
   border-radius: 9px;
   padding: 10px 11px;
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.55;
   color: var(--ko-ink-2);
 }

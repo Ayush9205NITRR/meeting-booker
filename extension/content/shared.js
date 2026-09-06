@@ -80,7 +80,7 @@ KylasOverlay.createPanel = function createPanel({ id, title, side = "right" }) {
   const launcher = document.createElement("button");
   launcher.className = "ko-launcher";
   launcher.title = "Open " + title;
-  launcher.textContent = "‹";
+  launcher.textContent = "E";
   launcher.hidden = true;
   shadow.appendChild(launcher);
 
@@ -118,14 +118,17 @@ KylasOverlay.createPanel = function createPanel({ id, title, side = "right" }) {
   collapseBtn.addEventListener("click", () => setCollapsed(true));
   launcher.addEventListener("click", () => setCollapsed(false));
 
-  // Remember the BD's choice across page loads — Kylas is a SPA they live
-  // in all day, and re-opening a panel they closed on every record is the
-  // fastest way to make an overlay annoying.
-  let startCollapsed = false;
+  // Starts as just the floating icon and opens on click, so the overlay
+  // never covers Kylas until it's asked for. Whatever the BD chooses is
+  // remembered across records — Kylas is a SPA they live in all day, and
+  // a panel that reappears on every record is the fastest way to make an
+  // overlay annoying.
+  let startCollapsed = true;
   try {
-    startCollapsed = localStorage.getItem("koCollapsed") === "1";
+    const saved = localStorage.getItem("koCollapsed");
+    if (saved !== null) startCollapsed = saved === "1";
   } catch (e) {
-    /* ignore */
+    /* storage blocked — fall back to closed */
   }
   setCollapsed(startCollapsed);
 
