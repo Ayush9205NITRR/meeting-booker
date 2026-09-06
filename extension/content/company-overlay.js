@@ -59,6 +59,11 @@
 
   function fieldsHtml(fields) {
     const rows = Object.entries(config.fields || {})
+      // A column the record doesn't have at all is a mapping mistake, not
+      // data — drop the row entirely rather than filling the panel with
+      // dashes. A column that exists but is blank still shows "—", because
+      // "never called" is worth seeing.
+      .filter(([, entry]) => resolve(entry).field in fields)
       .map(([label, entry]) => {
         const { field, type } = resolve(entry);
         const value = fields[field];

@@ -8,57 +8,49 @@
 //
 //  types: "text" (default) | "link" | "email" | "phone"
 //
-//  The column names below are NOT guesses — they're lifted from
-//  kylas-airtable-sync's config/field_map.json ("company" map), which
-//  is what already writes the `Company List` table twice a day. If a
-//  column is renamed there, rename it here too.
+//  ── Keep this SHORT. ────────────────────────────────────────────────
+//  The overlay is a glance, not a report. A good target is one badge,
+//  two or three stat tiles and four to six rows. Anything a BD reads
+//  once a quarter belongs in Airtable, not here.
 //
-//  Don't recognise a column? Open any company in Kylas and click
-//  "Show all fields" at the bottom of the overlay — it lists every
-//  column coming back, with its value.
+//  ── Getting the column names right ──────────────────────────────────
+//  A name that doesn't exist in the table is skipped silently rather
+//  than drawn as a dash, so a wrong guess costs you a missing row, not
+//  a broken panel. To see the truth, either:
+//    * run `python scripts/inspect_schema.py` in kylas-airtable-sync
+//      (prints every table and field name), or
+//    * click "Show all fields" at the bottom of the overlay.
 // ─────────────────────────────────────────────────────────────────────
 
 window.KylasOverlayConfig = {
   company: {
-    // Drives the panel header (avatar initials come from `name`).
+    // Avatar initials come from `name`.
     // subtitleType defaults to "text"; use "link" only for a URL column.
     header: {
-      name: "Company Name - Kylas",
-      subtitle: "Industry (Kylas)",
+      name: "Company Name",
+      subtitle: "Industry",
       subtitleType: "text",
     },
 
-    // Pills under the header — the account's state at a glance.
-    // Empty values are skipped automatically.
-    badges: ["Account Status", "Account Pipeline Stage", "Pipeline Stage BD"],
+    // One pill. The single most useful status, not every status.
+    badges: ["Highest Calling Stage"],
 
-    // Compact number tiles. This is the "how much have we worked this
-    // account" row that Lusha can't show you.
+    // Money and size, up front.
     stats: {
-      POCs: "Total POCs",
-      Active: "Active POCs",
-      Hot: "Hot POCs",
-      Connected: "Connected POCs",
-      MQL: "MQL POCs",
-      NOI: "NOI Count",
+      Revenue: "Company Revenue",
+      "Rev / employee": "Revenue Per Employee",
+      Employees: "Number of Employees",
     },
 
-    // The main body. Order here is the order on screen.
+    // The short list. Order here is the order on screen.
     fields: {
-      Owner: "Owner - Kylas",
-      "Owner email": { field: "Owner Email", type: "email" },
-      "Status of reachout": "Status of Reachout",
-      "Last called": "Last Called At (Contacts)",
-      "Health baseline": "Health Baseline",
-      "Status since": "Status Since",
-      "Claimed by": "Claimed By",
-      Batch: "Batch",
-      "Source of data": "Source of Data",
+      "Last interaction": "Last Call",
+      Owner: "Owner",
+      Website: { field: "Website", type: "link" },
+      Location: "City",
     },
 
     // Long-form block at the bottom, clamped with a "Show more" toggle.
-    // The Company List table has no free-text column today — add one
-    // here the moment it does.
     notes: {},
   },
 };

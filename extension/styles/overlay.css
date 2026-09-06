@@ -147,9 +147,10 @@
 
 /* ── stat tiles ─────────────────────────────────────────── */
 
+/* auto-fit so two tiles fill the row as neatly as three */
 .ko-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 6px;
   margin-bottom: 12px;
 }
@@ -163,11 +164,12 @@
 }
 
 .ko-stat-value {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 650;
   line-height: 1.15;
   color: var(--ko-ink);
   font-variant-numeric: tabular-nums;
+  word-break: break-word;
 }
 
 .ko-stat-label {
