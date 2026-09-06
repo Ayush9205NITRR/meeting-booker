@@ -1,7 +1,17 @@
-// Background service worker: the only part of the extension that talks to
-// the backend (POC Router Apps Script /exec endpoint). Content scripts never
-// fetch directly — this keeps CORS/CSP handling in one place and means the
-// backend URL only has to be configured once (popup -> chrome.storage.sync).
+// Background service worker: the only part of the extension that makes
+// network calls. Content scripts never fetch directly.
+//
+// There are two independent halves, and they don't share a setup:
+//
+//   Company overlay  -> Airtable, read directly (see airtable.js).
+//                       Needs only a read-only PAT in the popup. No
+//                       server, nothing deployed.
+//
+//   Booking / notes  -> POC Router Apps Script. Genuinely needs a server
+//                       because it touches Google Calendar and Kylas.
+//
+// So the overlay shows real data as soon as a PAT is set, whether or not
+// the booking backend exists yet.
 //
 // API contract (see ../README.md "Backend API Contract" for full spec):
 //   GET  {backendUrl}?action=companyOverlay&companyId=<id>      [pending Kylas.gs]
@@ -18,8 +28,14 @@
 //
 // Every response is JSON: { ok: true, ...} or { ok: false, error: "..." }.
 
+importScripts("airtable.js");
+
 const MOCK_MODE_NOTICE =
-  "No backend URL configured yet (set one in the extension popup). Showing demo data.";
+  "Demo data — no Airtable token set yet. Open the extension popup and paste a " +
+  "read-only Airtable PAT to see real company data.";
+
+const BOOKING_MOCK_NOTICE =
+  "No booking backend configured yet (set the POC Router URL in the extension popup).";
 
 async function getBackendUrl() {
   const { backendUrl } = await chrome.storage.sync.get("backendUrl");
@@ -97,7 +113,7 @@ function mockNextSlots(duration) {
   return {
     ok: true,
     demo: true,
-    notice: MOCK_MODE_NOTICE,
+    notice: BOOKING_MOCK_NOTICE,
     slots: [
       slot(2, ["Hritik", "Aarushi"]),
       slot(4, ["Shreya", "Keshav"]),
@@ -111,7 +127,7 @@ function mockBoard(localStart) {
   return {
     ok: true,
     demo: true,
-    notice: MOCK_MODE_NOTICE,
+    notice: BOOKING_MOCK_NOTICE,
     slot: { startIso: localStart, duration: 30 },
     players: [
       { name: "Hritik", email: "hrithik@enout.in", status: "FREE", line: "Nothing else booked", rank: 1 },
@@ -129,6 +145,11 @@ function mockBoard(localStart) {
 async function handleRequest(action, payload) {
   switch (action) {
     case "getCompanyOverlay": {
+      // Airtable first — it needs no server, so it's the path that works
+      // for a BD who has done nothing but paste a token.
+      const direct = await airtableCompanyLookup(payload.companyId);
+      if (direct) return direct;
+
       const result = await callBackend({
         action: "companyOverlay",
         companyId: payload.companyId,
@@ -157,7 +178,7 @@ async function handleRequest(action, payload) {
       return {
         ok: true,
         demo: true,
-        notice: MOCK_MODE_NOTICE + " No meeting was actually booked.",
+        notice: BOOKING_MOCK_NOTICE + " No meeting was actually booked.",
         primary: "Hritik",
         when: payload.localStart,
         link: null,
@@ -171,7 +192,7 @@ async function handleRequest(action, payload) {
       return {
         ok: true,
         demo: true,
-        notice: MOCK_MODE_NOTICE + " Notes were not actually saved.",
+        notice: BOOKING_MOCK_NOTICE + " Notes were not actually saved.",
       };
     }
     default:

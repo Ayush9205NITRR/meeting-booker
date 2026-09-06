@@ -1,16 +1,64 @@
-const backendInput = document.getElementById("backendUrl");
-const bookerInput = document.getElementById("bookerEmail");
-const status = document.getElementById("status");
+const FIELDS = [
+  "airtablePat",
+  "airtableBaseId",
+  "airtableTable",
+  "airtableIdColumn",
+  "backendUrl",
+  "bookerEmail",
+];
 
-chrome.storage.sync.get(["backendUrl", "bookerEmail"]).then(({ backendUrl, bookerEmail }) => {
-  if (backendUrl) backendInput.value = backendUrl;
-  if (bookerEmail) bookerInput.value = bookerEmail;
+const el = (id) => document.getElementById(id);
+const status = el("status");
+
+chrome.storage.sync.get(FIELDS).then((stored) => {
+  FIELDS.forEach((key) => {
+    if (stored[key]) el(key).value = stored[key];
+  });
+  // Open the advanced block if any of it was customised, so a non-default
+  // base or table isn't hidden away where nobody looks for it.
+  if (stored.airtableBaseId || stored.airtableTable || stored.airtableIdColumn) {
+    document.querySelector("details").open = true;
+  }
 });
 
-document.getElementById("save").addEventListener("click", async () => {
-  const backendUrl = backendInput.value.trim();
-  const bookerEmail = bookerInput.value.trim();
-  await chrome.storage.sync.set({ backendUrl, bookerEmail });
-  status.textContent = backendUrl ? "Saved." : "Backend URL cleared — demo mode active.";
-  setTimeout(() => (status.textContent = ""), 2000);
+function setStatus(text, cls) {
+  status.textContent = text;
+  status.className = cls || "";
+}
+
+el("save").addEventListener("click", async () => {
+  const values = {};
+  FIELDS.forEach((key) => {
+    values[key] = el(key).value.trim();
+  });
+  await chrome.storage.sync.set(values);
+
+  if (!values.airtablePat) {
+    setStatus("Saved. No Airtable token — the overlay will show demo data.", "");
+    return;
+  }
+
+  // Verify the token straight away rather than letting the BD discover it
+  // is wrong on a company page.
+  setStatus("Saved. Checking Airtable…", "");
+  const base = values.airtableBaseId || "app55PsyRKqkf2CAQ";
+  const table = values.airtableTable || "tbl2Jje9EBC4Cqydw";
+
+  try {
+    const res = await fetch(
+      `https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}?maxRecords=1`,
+      { headers: { Authorization: `Bearer ${values.airtablePat}` } }
+    );
+    if (res.ok) {
+      setStatus("Saved — Airtable connected.", "ok");
+    } else if (res.status === 401 || res.status === 403) {
+      setStatus("Saved, but Airtable rejected the token (check its base access).", "err");
+    } else if (res.status === 404) {
+      setStatus("Saved, but that base or table was not found.", "err");
+    } else {
+      setStatus(`Saved, but Airtable returned ${res.status}.`, "err");
+    }
+  } catch (err) {
+    setStatus("Saved, but Airtable could not be reached.", "err");
+  }
 });

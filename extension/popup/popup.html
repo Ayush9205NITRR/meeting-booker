@@ -6,65 +6,129 @@
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        width: 280px;
+        width: 320px;
         padding: 14px;
         font-size: 13px;
-        color: #1f2430;
+        color: #16192b;
       }
       h1 {
         font-size: 14px;
-        margin: 0 0 10px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8b91a3;
+        margin: 16px 0 8px;
+        padding-top: 12px;
+        border-top: 1px solid #eceef2;
+      }
+      h2.first {
+        border-top: none;
+        padding-top: 0;
+        margin-top: 10px;
       }
       label {
         display: block;
         font-weight: 600;
         margin-bottom: 4px;
+        font-size: 12px;
       }
       input {
         width: 100%;
         box-sizing: border-box;
-        padding: 6px 8px;
+        padding: 7px 9px;
         border: 1px solid #d8dce1;
-        border-radius: 6px;
-        font-size: 13px;
+        border-radius: 7px;
+        font-size: 12.5px;
+        margin-bottom: 4px;
+      }
+      input:focus {
+        outline: none;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
       }
       button {
-        margin-top: 10px;
+        margin-top: 14px;
         width: 100%;
-        padding: 8px;
-        border-radius: 6px;
-        border: 1px solid #2f5aff;
-        background: #2f5aff;
+        padding: 9px;
+        border-radius: 8px;
+        border: 1px solid #4f46e5;
+        background: #4f46e5;
         color: #fff;
         font-weight: 600;
+        font-size: 13px;
         cursor: pointer;
       }
+      button:hover {
+        background: #4338ca;
+      }
       p.hint {
-        color: #6b7280;
+        color: #8b91a3;
         font-size: 11px;
+        margin: 0 0 10px;
+        line-height: 1.45;
+      }
+      details {
         margin-top: 6px;
       }
-      #status {
+      summary {
+        font-size: 11.5px;
+        color: #5a6076;
+        cursor: pointer;
+      }
+      details > div {
         margin-top: 8px;
+      }
+      #status {
+        margin-top: 10px;
         font-size: 12px;
+        min-height: 16px;
+      }
+      .ok {
+        color: #067647;
+      }
+      .err {
+        color: #b42318;
       }
     </style>
   </head>
   <body>
     <h1>Kylas Overlay</h1>
+
+    <h2 class="first">Company data</h2>
+    <label for="airtablePat">Airtable token</label>
+    <input id="airtablePat" type="password" placeholder="pat..." />
+    <p class="hint">
+      Use a <strong>read-only</strong> personal access token with access to the
+      company base only. This is all the company overlay needs — no server, no
+      deployment. Leave blank to see demo data.
+    </p>
+
+    <details>
+      <summary>Advanced — base, table, key column</summary>
+      <div>
+        <label for="airtableBaseId">Base ID</label>
+        <input id="airtableBaseId" placeholder="app55PsyRKqkf2CAQ" />
+        <label for="airtableTable">Table (name or ID)</label>
+        <input id="airtableTable" placeholder="tbl2Jje9EBC4Cqydw" />
+        <label for="airtableIdColumn">Kylas ID column</label>
+        <input id="airtableIdColumn" placeholder="Kylas Company Id" />
+      </div>
+    </details>
+
+    <h2>Meeting booking</h2>
     <label for="backendUrl">POC Router web app URL</label>
     <input id="backendUrl" placeholder="https://script.google.com/macros/s/.../exec" />
-    <p class="hint">
-      Leave empty to try the extension with demo data. Once your POC Router
-      deployment exposes the overlay/booking endpoints, paste its /exec URL
-      here.
-    </p>
-    <label for="bookerEmail">Your email (must be a BOOKER)</label>
+    <label for="bookerEmail">Your email</label>
     <input id="bookerEmail" placeholder="you@enout.in" />
     <p class="hint">
-      Used as the "you" field on every booking — must be listed in POC
-      Router's BOOKERS.
+      Only needed for booking meetings. The company overlay works without
+      these.
     </p>
+
     <button id="save">Save</button>
     <div id="status"></div>
     <script src="popup.js"></script>

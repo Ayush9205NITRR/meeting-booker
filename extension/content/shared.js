@@ -54,13 +54,19 @@ KylasOverlay.createPanel = function createPanel({ id, title, side = "right" }) {
   const existing = document.getElementById(id);
   if (existing) existing.remove();
 
+  // Docked to the edge as a full-height rail, the way Lusha/Apollo sit,
+  // rather than floating over the middle of the record. pointer-events is
+  // off on the host so the collapsed rail doesn't eat clicks on the strip
+  // of page behind it; the panel and launcher turn it back on.
   const host = document.createElement("div");
   host.id = id;
   host.style.all = "initial";
   host.style.position = "fixed";
-  host.style.top = "96px";
-  host.style[side] = "16px";
+  host.style.top = "0";
+  host.style[side] = "0";
+  host.style.height = "100vh";
   host.style.zIndex = "2147483000";
+  host.style.pointerEvents = "none";
   document.body.appendChild(host);
 
   const shadow = host.attachShadow({ mode: "open" });
@@ -68,6 +74,15 @@ KylasOverlay.createPanel = function createPanel({ id, title, side = "right" }) {
   styleLink.rel = "stylesheet";
   styleLink.href = chrome.runtime.getURL("styles/overlay.css");
   shadow.appendChild(styleLink);
+
+  // Collapsing hides the whole rail and leaves a slim tab on the edge, so
+  // the BD gets the full Kylas page back rather than a stub panel.
+  const launcher = document.createElement("button");
+  launcher.className = "ko-launcher";
+  launcher.title = "Open " + title;
+  launcher.textContent = "‹";
+  launcher.hidden = true;
+  shadow.appendChild(launcher);
 
   const panel = document.createElement("div");
   panel.className = "ko-panel";
@@ -78,7 +93,7 @@ KylasOverlay.createPanel = function createPanel({ id, title, side = "right" }) {
         <div class="ko-title"></div>
         <div class="ko-subtitle"></div>
       </div>
-      <button class="ko-collapse" title="Collapse">−</button>
+      <button class="ko-collapse" title="Hide">›</button>
     </div>
     <div class="ko-body"></div>
   `;
@@ -90,11 +105,29 @@ KylasOverlay.createPanel = function createPanel({ id, title, side = "right" }) {
   const subtitleEl = panel.querySelector(".ko-subtitle");
   const collapseBtn = panel.querySelector(".ko-collapse");
 
-  collapseBtn.addEventListener("click", () => {
-    const collapsed = panel.classList.toggle("ko-collapsed");
-    collapseBtn.textContent = collapsed ? "+" : "−";
-    collapseBtn.title = collapsed ? "Expand" : "Collapse";
-  });
+  function setCollapsed(collapsed) {
+    panel.hidden = collapsed;
+    launcher.hidden = !collapsed;
+    try {
+      localStorage.setItem("koCollapsed", collapsed ? "1" : "0");
+    } catch (e) {
+      /* storage blocked — the panel just won't remember, which is fine */
+    }
+  }
+
+  collapseBtn.addEventListener("click", () => setCollapsed(true));
+  launcher.addEventListener("click", () => setCollapsed(false));
+
+  // Remember the BD's choice across page loads — Kylas is a SPA they live
+  // in all day, and re-opening a panel they closed on every record is the
+  // fastest way to make an overlay annoying.
+  let startCollapsed = false;
+  try {
+    startCollapsed = localStorage.getItem("koCollapsed") === "1";
+  } catch (e) {
+    /* ignore */
+  }
+  setCollapsed(startCollapsed);
 
   function setHeader({ name, subtitleHtml, avatar }) {
     titleEl.textContent = name || title;

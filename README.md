@@ -28,16 +28,39 @@ Kylas Contact page   →  "Book Meeting"     →  meeting type → slots → con
   are still needed to see how/where that's wired in before the
   `bookMeeting`/`addNotes` endpoints below can be finished.
 
-## Load the extension (unpacked, for development)
+## Setup
+
+The company overlay and the meeting booking are independent. The overlay
+needs **only an Airtable token** — no server, nothing deployed.
+
+### Company overlay (2 minutes)
 
 1. `chrome://extensions` → enable **Developer mode**.
 2. **Load unpacked** → select the `extension/` folder in this repo.
-3. Click the extension icon → paste your POC Router `/exec` URL once it
-   exposes the endpoints below, and **Save**. Leave it blank to explore with
-   demo data.
-4. Open any Kylas company or contact detail page
-   (`https://app.kylas.io/sales/companies/details/<id>` or
-   `.../sales/contacts/details/<id>`) — the overlay panel appears top-right.
+3. Create a **read-only** Airtable personal access token at
+   <https://airtable.com/create/tokens> with scope `data.records:read` and
+   access to the company base (`app55PsyRKqkf2CAQ`).
+4. Click the extension icon, paste the token, **Save**. It verifies the
+   token immediately and tells you if it's wrong.
+5. Open any Kylas company page
+   (`https://app.kylas.io/sales/companies/details/<id>`). The panel docks to
+   the right with that company's real `Company List` row.
+
+That's it. Base, table and key column default to the right values; the
+**Advanced** section in the popup overrides them if that ever changes.
+
+> **On the token.** It sits in the browser's extension storage, so anyone
+> who installs the extension can read it out of their own browser. Keep it
+> read-only and scoped to the one base, and it can't do damage. If that
+> isn't acceptable, the `poc-router/` backend keeps the token server-side
+> instead — same overlay, more setup.
+
+### Meeting booking (needs the backend)
+
+Booking touches Google Calendar and Kylas, so it does need a server. Paste
+the POC Router `/exec` URL and your email into the popup — see
+`poc-router/README.md`. Until then the booking flow runs on demo data; the
+company overlay is unaffected.
 
 Because Apps Script web apps deployed with `executeAs: USER_ACCESSING` run as
 the signed-in Google account making the request, the BD must already be
