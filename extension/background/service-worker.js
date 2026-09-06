@@ -46,9 +46,16 @@ const MOCK_MODE_NOTICE =
 const BOOKING_MOCK_NOTICE =
   "No booking backend configured yet (set the POC Router URL in the extension popup).";
 
+// Same precedence as the Airtable settings: BD's own entry, then what an
+// admin pushed, then what's bundled in the folder.
 async function getBackendUrl() {
   const { backendUrl } = await chrome.storage.sync.get("backendUrl");
-  return backendUrl || null;
+  if (backendUrl) return backendUrl;
+
+  const managed = await managedSettings();
+  if (managed.backendUrl) return managed.backendUrl;
+
+  return bundledSettings().backendUrl || null;
 }
 
 async function callBackend(params) {
@@ -203,6 +210,16 @@ async function handleRequest(action, payload) {
         demo: true,
         notice: BOOKING_MOCK_NOTICE + " Notes were not actually saved.",
       };
+    }
+    // Lets the popup say "already configured" instead of showing an empty
+    // box a BD might mistake for missing setup. Never returns the token.
+    case "tokenSource": {
+      const stored = await chrome.storage.sync.get("airtablePat");
+      if (stored.airtablePat) return { ok: true, source: "user" };
+      const managed = await managedSettings();
+      if (managed.airtablePat) return { ok: true, source: "managed" };
+      if (bundledSettings().airtablePat) return { ok: true, source: "bundled" };
+      return { ok: true, source: "none" };
     }
     default:
       return { ok: false, error: `unknown action: ${action}` };

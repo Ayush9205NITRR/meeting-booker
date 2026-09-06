@@ -55,6 +55,50 @@ That's it. Base, table and key column default to the right values; the
 > isn't acceptable, the `poc-router/` backend keeps the token server-side
 > instead — same overlay, more setup.
 
+## Rolling out to the team — how BDs get the token
+
+Nobody should be pasting a token into a popup: it means the token gets
+passed around Slack, and every new joiner is a support request. Pick one of
+these instead.
+
+### 1. Admin policy (recommended for a real rollout)
+
+The token lives in the Google Admin console, not in the extension package.
+BDs install and enter nothing.
+
+1. Publish the extension to the Chrome Web Store as **private to your
+   organisation**, and force-install it from **admin.google.com → Devices →
+   Chrome → Apps & Extensions**.
+2. On the same screen, open **Policy for extensions** and paste:
+   ```json
+   { "airtablePat": { "Value": "patXXXXXXXX" } }
+   ```
+3. Done. Rotating the token later is one edit in the admin console — no new
+   extension version, nothing for BDs to do.
+
+Base, table, key column and the POC Router URL can be pushed the same way
+(see `extension/managed_schema.json`).
+
+### 2. Bundled file (fine for testing now)
+
+```bash
+cp extension/config/secrets.example.js extension/config/secrets.js
+# paste the token
+```
+
+`secrets.js` is gitignored. Everyone who gets the folder is configured. The
+catch: the token ships inside the package, so anyone who installs it can
+unzip and read it — read-only and base-scoped matters here.
+
+### 3. Each BD pastes their own
+
+Works, but don't use it for a team. It's for testing a different base
+without touching files.
+
+**Precedence** is: what the BD typed → what the admin pushed → the bundled
+file → built-in defaults. So a BD with nothing set still gets the admin's
+values, and a BD who sets something keeps it.
+
 ### Meeting booking (needs the backend)
 
 Booking touches Google Calendar and Kylas, so it does need a server. Paste

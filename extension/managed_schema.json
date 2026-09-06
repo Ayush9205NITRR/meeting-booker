@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kylas Overlay settings",
+  "description": "Pushed from the Google Admin console so BDs never enter anything. admin.google.com -> Devices -> Chrome -> Apps & Extensions -> Kylas Overlay -> Policy for extensions.",
+  "type": "object",
+  "properties": {
+    "airtablePat": {
+      "title": "Airtable personal access token",
+      "description": "Read-only token scoped to the company base. Set here, the token stays in the admin console and never ships inside the extension package.",
+      "type": "string"
+    },
+    "airtableBaseId": {
+      "title": "Airtable base ID",
+      "description": "Defaults to the company base if unset.",
+      "type": "string"
+    },
+    "airtableTable": {
+      "title": "Airtable table name or ID",
+      "description": "Defaults to the Company List table if unset.",
+      "type": "string"
+    },
+    "airtableIdColumn": {
+      "title": "Kylas company ID column",
+      "description": "Defaults to \"Kylas Company Id\" if unset.",
+      "type": "string"
+    },
+    "backendUrl": {
+      "title": "POC Router web app URL",
+      "description": "Only needed for meeting booking.",
+      "type": "string"
+    }
+  }
+}

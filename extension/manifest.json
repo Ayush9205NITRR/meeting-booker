@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Surfaces curated Airtable company data and one-click meeting booking directly inside Kylas.",
   "permissions": ["storage"],
+  "storage": {
+    "managed_schema": "managed_schema.json"
+  },
   "host_permissions": [
     "https://app.kylas.io/*",
     "https://script.google.com/*",

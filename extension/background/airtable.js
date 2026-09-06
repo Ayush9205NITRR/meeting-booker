@@ -25,23 +25,50 @@ const AIRTABLE_DEFAULTS = {
 
 // config/secrets.js is gitignored and optional. When it's present the
 // whole team is configured by shipping the folder — nobody types a
-// token. A token set in the popup still wins, for testing.
-function bundledPat() {
-  return (self.KylasOverlaySecrets && self.KylasOverlaySecrets.airtablePat) || "";
+// token.
+function bundledSettings() {
+  return self.KylasOverlaySecrets || {};
 }
 
+// Values an admin pushed from the Google Admin console. This is the way
+// to roll out to a team: the token stays in the admin console instead of
+// inside the extension package, and BDs enter nothing at all.
+// Empty object when no policy is set, which is the normal case for a
+// developer-mode install.
+async function managedSettings() {
+  try {
+    return (await chrome.storage.managed.get(null)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * Precedence: what the BD typed > what the admin pushed > what's bundled
+ * in the folder > the built-in default. The user's own entry wins so a
+ * one-off test doesn't require an admin, and everything below it means a
+ * BD who has done nothing is still configured.
+ */
 async function airtableSettings() {
-  const stored = await chrome.storage.sync.get([
-    "airtablePat",
-    "airtableBaseId",
-    "airtableTable",
-    "airtableIdColumn",
+  const [stored, managed] = await Promise.all([
+    chrome.storage.sync.get([
+      "airtablePat",
+      "airtableBaseId",
+      "airtableTable",
+      "airtableIdColumn",
+    ]),
+    managedSettings(),
   ]);
+  const bundled = bundledSettings();
+
+  const pick = (key, fallback) =>
+    String(stored[key] || managed[key] || bundled[key] || fallback || "").trim();
+
   return {
-    pat: (stored.airtablePat || bundledPat() || "").trim(),
-    baseId: (stored.airtableBaseId || AIRTABLE_DEFAULTS.airtableBaseId).trim(),
-    table: (stored.airtableTable || AIRTABLE_DEFAULTS.airtableTable).trim(),
-    idColumn: (stored.airtableIdColumn || AIRTABLE_DEFAULTS.airtableIdColumn).trim(),
+    pat: pick("airtablePat", ""),
+    baseId: pick("airtableBaseId", AIRTABLE_DEFAULTS.airtableBaseId),
+    table: pick("airtableTable", AIRTABLE_DEFAULTS.airtableTable),
+    idColumn: pick("airtableIdColumn", AIRTABLE_DEFAULTS.airtableIdColumn),
   };
 }
 

@@ -19,7 +19,36 @@ chrome.storage.sync.get(FIELDS).then((stored) => {
   if (stored.airtableBaseId || stored.airtableTable || stored.airtableIdColumn) {
     document.querySelector("details").open = true;
   }
+  if (!stored.airtablePat) showProvidedToken();
 });
+
+// A token can arrive from an admin policy or from the bundled secrets
+// file, in which case the empty box is not "unconfigured" and a BD should
+// not go hunting for a token to paste.
+async function showProvidedToken() {
+  let managed = {};
+  try {
+    managed = (await chrome.storage.managed.get(null)) || {};
+  } catch (e) {
+    /* no policy set */
+  }
+  if (managed.airtablePat) {
+    el("airtablePat").placeholder = "Set by your administrator — nothing to do";
+    return;
+  }
+  // The bundled file lives in the service worker's scope, so ask it.
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: "KYLAS_OVERLAY_REQUEST",
+      action: "tokenSource",
+    });
+    if (res && res.source === "bundled") {
+      el("airtablePat").placeholder = "Already configured — nothing to do";
+    }
+  } catch (e) {
+    /* worker asleep; leave the default placeholder */
+  }
+}
 
 function setStatus(text, cls) {
   status.textContent = text;
