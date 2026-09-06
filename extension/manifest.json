@@ -14,7 +14,7 @@
   "content_scripts": [
     {
       "matches": ["https://app.kylas.io/sales/companies/details/*"],
-      "js": ["content/shared.js", "content/company-overlay.js"],
+      "js": ["config/field-map.js", "content/shared.js", "content/company-overlay.js"],
       "run_at": "document_idle"
     },
     {

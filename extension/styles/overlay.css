@@ -1,88 +1,158 @@
-.ko-panel {
-  width: 300px;
-  max-height: 70vh;
-  overflow-y: auto;
-  background: #ffffff;
-  border: 1px solid #d8dce1;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(20, 24, 33, 0.16);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 13px;
-  color: #1f2430;
+:host {
+  --ko-accent: #4f46e5;
+  --ko-accent-soft: #eef2ff;
+  --ko-accent-text: #4338ca;
+  --ko-ink: #16192b;
+  --ko-ink-2: #5a6076;
+  --ko-ink-3: #8b91a3;
+  --ko-line: #eceef2;
+  --ko-surface: #ffffff;
+  --ko-surface-2: #f8f9fb;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+.ko-panel {
+  width: 344px;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ko-surface);
+  border: 1px solid var(--ko-line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 20, 36, 0.04), 0 12px 32px rgba(16, 20, 36, 0.14);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ko-ink);
+  overflow: hidden;
+}
+
+/* ── header ─────────────────────────────────────────────── */
 
 .ko-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: #f5f6f8;
-  border-bottom: 1px solid #e2e5ea;
-  border-radius: 10px 10px 0 0;
-  cursor: default;
+  gap: 10px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--ko-line);
+  background: var(--ko-surface);
+}
+
+.ko-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--ko-accent), #7c6cf6);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ko-head-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .ko-title {
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ko-subtitle {
+  font-size: 12px;
+  color: var(--ko-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.ko-subtitle a {
+  color: var(--ko-accent);
+  text-decoration: none;
+}
+
+.ko-subtitle a:hover {
+  text-decoration: underline;
 }
 
 .ko-collapse {
   border: none;
   background: transparent;
+  color: var(--ko-ink-3);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  color: #5b6270;
-  padding: 2px 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  flex: 0 0 auto;
 }
 
+.ko-collapse:hover {
+  background: var(--ko-surface-2);
+  color: var(--ko-ink);
+}
+
+/* ── body ───────────────────────────────────────────────── */
+
 .ko-body {
-  padding: 12px;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
 }
 
 .ko-panel.ko-collapsed .ko-body {
   display: none;
 }
 
-.ko-loading,
-.ko-empty {
-  color: #6b7280;
-  padding: 8px 0;
+.ko-body::-webkit-scrollbar {
+  width: 8px;
 }
 
-.ko-error {
-  color: #b42318;
-  background: #fef3f2;
-  border: 1px solid #fda29b;
-  border-radius: 6px;
-  padding: 8px;
-  margin-bottom: 8px;
+.ko-body::-webkit-scrollbar-thumb {
+  background: #dfe2e8;
+  border-radius: 8px;
+  border: 2px solid var(--ko-surface);
 }
 
-.ko-notice {
-  color: #7a5b00;
-  background: #fff8e6;
-  border: 1px solid #f2d98d;
-  border-radius: 6px;
-  padding: 6px 8px;
-  margin-bottom: 8px;
-  font-size: 12px;
+/* ── badges ─────────────────────────────────────────────── */
+
+.ko-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
-.ko-success {
-  color: #0a6b3d;
-  background: #eafcf3;
-  border: 1px solid #9ce6bd;
-  border-radius: 6px;
-  padding: 8px;
-  margin-bottom: 8px;
+.ko-badge {
+  font-size: 11px;
+  font-weight: 550;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--ko-accent-soft);
+  color: var(--ko-accent-text);
+  white-space: nowrap;
 }
+
+/* ── field rows ─────────────────────────────────────────── */
 
 .ko-row {
   display: flex;
   flex-direction: column;
-  padding: 6px 0;
-  border-bottom: 1px solid #eef0f3;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ko-line);
+  position: relative;
 }
 
 .ko-row:last-child {
@@ -90,21 +160,245 @@
 }
 
 .ko-row-label {
+  font-size: 10px;
   font-weight: 600;
-  color: #5b6270;
-  font-size: 11px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: 2px;
+  color: var(--ko-ink-3);
+  margin-bottom: 3px;
 }
 
 .ko-row-value {
-  color: #1f2430;
+  font-size: 13px;
+  color: var(--ko-ink);
+  word-break: break-word;
+  padding-right: 26px;
+}
+
+.ko-row-value a {
+  color: var(--ko-accent);
+  text-decoration: none;
+}
+
+.ko-row-value a:hover {
+  text-decoration: underline;
+}
+
+.ko-empty-value {
+  color: #c2c6d0;
+}
+
+.ko-copy {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ko-ink-3);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ko-row:hover .ko-copy {
+  opacity: 1;
+}
+
+.ko-copy:hover {
+  background: var(--ko-surface-2);
+  color: var(--ko-ink);
+}
+
+/* ── notes block ────────────────────────────────────────── */
+
+.ko-note {
+  margin-top: 12px;
+}
+
+.ko-note-body {
+  background: var(--ko-surface-2);
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+  padding: 10px 11px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ko-ink-2);
+}
+
+/* The clamp lives on an inner element with no padding of its own —
+   -webkit-line-clamp clips at the padding box, so a padded element
+   leaks a sliver of the next line into its bottom padding. */
+.ko-note-text {
+  white-space: pre-wrap;
+}
+
+.ko-note-text.ko-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ko-more {
+  border: none;
+  background: transparent;
+  color: var(--ko-accent);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  padding: 5px 0 0;
+}
+
+/* ── section + footer ───────────────────────────────────── */
+
+.ko-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ko-ink-3);
+  margin: 14px 0 6px;
+}
+
+.ko-footer {
+  border-top: 1px solid var(--ko-line);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.ko-ghost-btn {
+  width: 100%;
+  border: 1px solid var(--ko-line);
+  background: var(--ko-surface);
+  color: var(--ko-ink-2);
+  border-radius: 8px;
+  padding: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ko-ghost-btn:hover {
+  background: var(--ko-surface-2);
+  color: var(--ko-ink);
+}
+
+.ko-raw {
+  margin-top: 10px;
+  border: 1px solid var(--ko-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ko-raw-row {
+  display: flex;
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 11.5px;
+  border-bottom: 1px solid var(--ko-line);
+  background: var(--ko-surface-2);
+}
+
+.ko-raw-row:last-child {
+  border-bottom: none;
+}
+
+.ko-raw-key {
+  flex: 0 0 44%;
+  font-weight: 600;
+  color: var(--ko-ink-2);
   word-break: break-word;
 }
 
+.ko-raw-val {
+  flex: 1;
+  color: var(--ko-ink-3);
+  word-break: break-word;
+}
+
+/* ── states ─────────────────────────────────────────────── */
+
+.ko-skeleton-row {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #eef0f4 25%, #f6f7f9 37%, #eef0f4 63%);
+  background-size: 400% 100%;
+  animation: ko-shimmer 1.3s ease-in-out infinite;
+  margin-bottom: 10px;
+}
+
+.ko-skeleton-row.ko-short {
+  width: 45%;
+}
+
+@keyframes ko-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.ko-empty {
+  color: var(--ko-ink-3);
+  padding: 10px 0;
+  font-size: 12.5px;
+}
+
+.ko-error {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 8px;
+  padding: 9px 10px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+
+.ko-notice {
+  color: #854708;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  padding: 7px 9px;
+  margin-bottom: 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.ko-success {
+  color: #067647;
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  border-radius: 8px;
+  padding: 9px 10px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+
+/* ── booking flow controls ──────────────────────────────── */
+
+/* The allocation reason from getBoard() — a full sentence, so it keeps
+   normal case rather than reusing the uppercase micro-label style. */
+.ko-why {
+  font-size: 12px;
+  color: var(--ko-ink-2);
+  background: var(--ko-accent-soft);
+  border-radius: 8px;
+  padding: 7px 9px;
+  margin: 10px 0 8px;
+  line-height: 1.4;
+}
+
 .ko-step-title {
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ko-ink-3);
   margin-bottom: 8px;
 }
 
@@ -112,43 +406,61 @@
 .ko-secondary-btn {
   display: block;
   width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 9px 12px;
+  border-radius: 9px;
   font-size: 13px;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
   margin-top: 8px;
-  box-sizing: border-box;
 }
 
 .ko-primary-btn {
-  background: #2f5aff;
-  border: 1px solid #2f5aff;
-  color: #ffffff;
+  background: var(--ko-accent);
+  border: 1px solid var(--ko-accent);
+  color: #fff;
+}
+
+.ko-primary-btn:hover:not(:disabled) {
+  background: #4338ca;
 }
 
 .ko-primary-btn:disabled {
-  background: #b9c3ff;
-  border-color: #b9c3ff;
+  background: #c7c9f7;
+  border-color: #c7c9f7;
   cursor: not-allowed;
 }
 
 .ko-secondary-btn {
-  background: #ffffff;
-  border: 1px solid #d8dce1;
-  color: #1f2430;
+  background: var(--ko-surface);
+  border: 1px solid var(--ko-line);
+  color: var(--ko-ink-2);
+}
+
+.ko-secondary-btn:hover {
+  background: var(--ko-surface-2);
+  color: var(--ko-ink);
 }
 
 .ko-radio-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+  margin-bottom: 6px;
   cursor: pointer;
+  font-size: 12.5px;
+}
+
+.ko-radio-row:hover {
+  border-color: #c9cbf5;
+  background: #fafaff;
 }
 
 .ko-muted {
-  color: #9aa1ac;
+  color: var(--ko-ink-3);
   margin-left: auto;
   font-size: 11px;
 }
@@ -163,46 +475,57 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid #d8dce1;
-  background: #fafbfc;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--ko-line);
+  background: var(--ko-surface);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
+  font-family: inherit;
   text-align: left;
+  color: var(--ko-ink);
 }
 
 .ko-slot-btn:hover {
-  border-color: #2f5aff;
-  background: #f0f4ff;
+  border-color: var(--ko-accent);
+  background: #fafaff;
 }
 
 textarea,
 input[type="text"] {
   width: 100%;
-  border-radius: 6px;
-  border: 1px solid #d8dce1;
-  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--ko-line);
+  padding: 8px 10px;
   font-family: inherit;
-  font-size: 13px;
-  box-sizing: border-box;
+  font-size: 12.5px;
+  color: var(--ko-ink);
   margin-bottom: 8px;
+  background: var(--ko-surface);
+}
+
+textarea:focus,
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--ko-accent);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 
 textarea {
-  min-height: 60px;
+  min-height: 62px;
   resize: vertical;
 }
 
 .ko-notes-box {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid #eef0f3;
+  border-top: 1px solid var(--ko-line);
 }
 
 #ko-standalone-notes-status,
 #ko-confirm-status {
   margin-top: 6px;
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 11.5px;
+  color: var(--ko-ink-3);
 }

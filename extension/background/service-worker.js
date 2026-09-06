@@ -58,15 +58,22 @@ function mockCompanyOverlay(companyId) {
     ok: true,
     demo: true,
     notice: MOCK_MODE_NOTICE,
+    // Column names mirror the Company List table that kylas-airtable-sync
+    // already writes, so the default field-map.js renders fully in demo mode.
     company: {
       id: companyId,
       fields: {
+        "Kylas Company Id": companyId,
         "Company Name": "Acme Robotics (demo)",
         Industry: "Manufacturing",
         Website: "acme-robotics.example",
-        "Account Stage": "Discovery",
-        "Curated Notes": "Interested in the enterprise tier. Champion is the ops lead.",
-        Tags: "warm, enterprise",
+        Phone: "+91 98765 43210",
+        Email: "hello@acme-robotics.example",
+        City: "Pune",
+        State: "Maharashtra",
+        Country: "India",
+        Description:
+          "Interested in the enterprise tier. Champion is the ops lead; procurement runs through the CFO. Last touch was a cold call in March that went well — they asked for a demo but it never got scheduled.",
       },
     },
   };

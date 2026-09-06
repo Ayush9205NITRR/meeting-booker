@@ -238,7 +238,7 @@
       <div class="ko-row"><div class="ko-row-label">When</div><div class="ko-row-value">${KylasOverlay.escapeHtml(
         selectedSlot.label
       )}</div></div>
-      <div class="ko-row-label">${KylasOverlay.escapeHtml(board.why || "POC")}</div>
+      <div class="ko-why">${KylasOverlay.escapeHtml(board.why || "Pick who takes this call.")}</div>
       ${playerOptions}
       <label class="ko-row-label">Title</label>
       <input type="text" id="ko-title" value="${KylasOverlay.escapeHtml(selectedCallType.name)}">
@@ -333,6 +333,11 @@
   });
 
   KylasOverlay.watchRecordId(CONTACT_PATH, (contactId) => {
+    panel.setHeader({
+      name: "Book Meeting",
+      avatar: "📅",
+      subtitleHtml: `Contact #${KylasOverlay.escapeHtml(contactId)}`,
+    });
     currentContactId = contactId;
     selectedCallType = null;
     selectedSlot = null;
