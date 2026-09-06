@@ -1,0 +1,203 @@
+.ko-panel {
+  width: 300px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #d8dce1;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(20, 24, 33, 0.16);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: #1f2430;
+}
+
+.ko-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f5f6f8;
+  border-bottom: 1px solid #e2e5ea;
+  border-radius: 10px 10px 0 0;
+  cursor: default;
+}
+
+.ko-title {
+  font-weight: 600;
+}
+
+.ko-collapse {
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: #5b6270;
+  padding: 2px 6px;
+}
+
+.ko-body {
+  padding: 12px;
+}
+
+.ko-panel.ko-collapsed .ko-body {
+  display: none;
+}
+
+.ko-loading,
+.ko-empty {
+  color: #6b7280;
+  padding: 8px 0;
+}
+
+.ko-error {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fda29b;
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.ko-notice {
+  color: #7a5b00;
+  background: #fff8e6;
+  border: 1px solid #f2d98d;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.ko-success {
+  color: #0a6b3d;
+  background: #eafcf3;
+  border: 1px solid #9ce6bd;
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.ko-row {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.ko-row:last-child {
+  border-bottom: none;
+}
+
+.ko-row-label {
+  font-weight: 600;
+  color: #5b6270;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+
+.ko-row-value {
+  color: #1f2430;
+  word-break: break-word;
+}
+
+.ko-step-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.ko-primary-btn,
+.ko-secondary-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  box-sizing: border-box;
+}
+
+.ko-primary-btn {
+  background: #2f5aff;
+  border: 1px solid #2f5aff;
+  color: #ffffff;
+}
+
+.ko-primary-btn:disabled {
+  background: #b9c3ff;
+  border-color: #b9c3ff;
+  cursor: not-allowed;
+}
+
+.ko-secondary-btn {
+  background: #ffffff;
+  border: 1px solid #d8dce1;
+  color: #1f2430;
+}
+
+.ko-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.ko-muted {
+  color: #9aa1ac;
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.ko-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ko-slot-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #d8dce1;
+  background: #fafbfc;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.ko-slot-btn:hover {
+  border-color: #2f5aff;
+  background: #f0f4ff;
+}
+
+textarea {
+  width: 100%;
+  min-height: 60px;
+  border-radius: 6px;
+  border: 1px solid #d8dce1;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.ko-notes-box {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #eef0f3;
+}
+
+#ko-standalone-notes-status,
+#ko-confirm-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}

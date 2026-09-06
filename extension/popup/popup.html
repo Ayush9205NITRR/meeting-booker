@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Kylas Overlay Settings</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        width: 280px;
+        padding: 14px;
+        font-size: 13px;
+        color: #1f2430;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 10px;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid #d8dce1;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      button {
+        margin-top: 10px;
+        width: 100%;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #2f5aff;
+        background: #2f5aff;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      p.hint {
+        color: #6b7280;
+        font-size: 11px;
+        margin-top: 6px;
+      }
+      #status {
+        margin-top: 8px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Kylas Overlay</h1>
+    <label for="backendUrl">POC Router web app URL</label>
+    <input id="backendUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+    <p class="hint">
+      Leave empty to try the extension with demo data. Once your POC Router
+      deployment exposes the overlay/booking endpoints, paste its /exec URL
+      here.
+    </p>
+    <button id="save">Save</button>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
