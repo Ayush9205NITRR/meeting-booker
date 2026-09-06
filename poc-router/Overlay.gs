@@ -9,8 +9,14 @@
  * The only change needed elsewhere is two lines in Code.gs doGet —
  * see README.md in this folder.
  *
+ * This is NOT a new Airtable integration. It reads the same base,
+ * the same table and the same column that kylas-airtable-sync
+ * already writes twice a day, using the same token — the values
+ * below are the ones already in that repo's GitHub Secrets.
+ *
  * Secrets live in Script Properties, never in this file:
- *   AIRTABLE_PAT    (required) Airtable personal access token
+ *   AIRTABLE_PAT    (required) the SAME token as the sync's
+ *                   AIRTABLE_PAT secret. Read-only is enough here.
  *   OVERLAY_TOKEN   (optional) shared secret; if set, every request
  *                   must carry ?token=<value>. Only needed if the
  *                   deployment is opened up to "Anyone" — see README.
@@ -21,10 +27,17 @@
 
 // ============ CONFIG ============
 
-const OVERLAY_AIRTABLE_BASE  = 'app55PsyRKqkf2CAQ';
-const OVERLAY_AIRTABLE_TABLE = 'tbl2Jje9EBC4Cqydw';
+// = kylas-airtable-sync's AIRTABLE_COMPANY_BASE_ID.
+const OVERLAY_AIRTABLE_BASE = 'app55PsyRKqkf2CAQ';
+
+// Table by name, mirroring the sync's AirtableClient("Company List").
+// The table id tbl2Jje9EBC4Cqydw works here too, and survives a rename.
+const OVERLAY_AIRTABLE_TABLE = 'Company List';
 
 // The Airtable column holding the Kylas company id. Must match exactly.
+// = field_map.json -> company -> id. Note the CRM base's `Companies`
+// table spells it "Kylas Company ID" instead — different table, don't
+// mix them up.
 const OVERLAY_COMPANY_ID_FIELD = 'Kylas Company Id';
 
 // A company id known to exist, used only by overlaySelfTest().
@@ -101,7 +114,11 @@ function overlayAirtablePat_() {
  */
 function overlayAirtableFind_(id) {
   const formula = "TRIM({" + OVERLAY_COMPANY_ID_FIELD + "} & '') = '" + id.replace(/'/g, "\\'") + "'";
-  const url = 'https://api.airtable.com/v0/' + OVERLAY_AIRTABLE_BASE + '/' + OVERLAY_AIRTABLE_TABLE +
+  // The table is referenced by name ("Company List"), so it has to be
+  // encoded — an unescaped space here is a 404 that looks like a
+  // missing table.
+  const url = 'https://api.airtable.com/v0/' + OVERLAY_AIRTABLE_BASE + '/' +
+              encodeURIComponent(OVERLAY_AIRTABLE_TABLE) +
               '?maxRecords=1&filterByFormula=' + encodeURIComponent(formula);
 
   const res = UrlFetchApp.fetch(url, {

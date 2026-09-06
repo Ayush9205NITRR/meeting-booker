@@ -145,6 +145,40 @@
   white-space: nowrap;
 }
 
+/* ── stat tiles ─────────────────────────────────────────── */
+
+.ko-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ko-stat {
+  background: var(--ko-surface-2);
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.ko-stat-value {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.15;
+  color: var(--ko-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ko-stat-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ko-ink-3);
+  margin-top: 2px;
+}
+
 /* ── field rows ─────────────────────────────────────────── */
 
 .ko-row {

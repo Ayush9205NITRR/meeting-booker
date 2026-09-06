@@ -37,6 +37,26 @@
     return badges ? `<div class="ko-badges">${badges}</div>` : "";
   }
 
+  // Compact number tiles — POC counts and other at-a-glance figures.
+  // A zero is meaningful here ("nobody worked this account"), so unlike
+  // badges these render even when the value is 0.
+  function statsHtml(fields) {
+    const tiles = Object.entries(config.stats || {})
+      .map(([label, entry]) => {
+        const { field } = resolve(entry);
+        const raw = fields[field];
+        if (raw == null || String(raw).trim() === "") return "";
+        return `
+          <div class="ko-stat">
+            <div class="ko-stat-value">${KylasOverlay.escapeHtml(raw)}</div>
+            <div class="ko-stat-label">${KylasOverlay.escapeHtml(label)}</div>
+          </div>`;
+      })
+      .filter(Boolean)
+      .join("");
+    return tiles ? `<div class="ko-stats">${tiles}</div>` : "";
+  }
+
   function fieldsHtml(fields) {
     const rows = Object.entries(config.fields || {})
       .map(([label, entry]) => {
@@ -100,7 +120,7 @@
     panel.setHeader({
       name,
       subtitleHtml: subtitleValue
-        ? KylasOverlay.renderValue(subtitleValue, "link")
+        ? KylasOverlay.renderValue(subtitleValue, headerConfig.subtitleType || "text")
         : `<span class="ko-empty-value">No ${KylasOverlay.escapeHtml(
             headerConfig.subtitle || "subtitle"
           )}</span>`,
@@ -120,6 +140,7 @@
     panel.setBody(`
       ${notice}
       ${badgesHtml(fields)}
+      ${statsHtml(fields)}
       ${fieldsHtml(fields)}
       ${notesHtml(fields)}
       <div class="ko-footer">
