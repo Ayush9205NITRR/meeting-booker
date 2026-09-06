@@ -4,11 +4,17 @@
 // backend URL only has to be configured once (popup -> chrome.storage.sync).
 //
 // API contract (see ../README.md "Backend API Contract" for full spec):
-//   GET  {backendUrl}?action=companyOverlay&companyId=<id>
-//   GET  {backendUrl}?action=meetingTypes
-//   GET  {backendUrl}?action=availability&meetingTypeId=<id>&contactId=<id>
-//   POST {backendUrl}  { action: "bookMeeting", ... }
-//   POST {backendUrl}  { action: "addNotes", ... }
+//   GET  {backendUrl}?action=companyOverlay&companyId=<id>      [pending Kylas.gs]
+//   GET  {backendUrl}?action=nextSlots&duration=<mins>&count=<n> [confirmed, wraps findNextSlots()]
+//   GET  {backendUrl}?action=board&localStart=<...>&duration=<mins> [confirmed, wraps getBoard()]
+//   POST {backendUrl}  { action: "bookMeeting", you, primaryEmail, localStart,
+//                         duration, title, company, callType, reviewers[],
+//                         externals[], notes }                   [calendar part confirmed, deal creation pending]
+//   POST {backendUrl}  { action: "addNotes", ... }               [pending Kylas.gs]
+//
+// `credentials: "include"` is required on every call: the Apps Script web
+// app is deployed executeAs USER_ACCESSING / access DOMAIN, so it relies on
+// the browser's existing Google session cookie for the signed-in BD.
 //
 // Every response is JSON: { ok: true, ...} or { ok: false, error: "..." }.
 
@@ -28,7 +34,7 @@ async function callBackend(params) {
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { credentials: "include" });
   return res.json();
 }
 
@@ -40,6 +46,7 @@ async function postBackend(payload) {
   // (application/json triggers an OPTIONS request Apps Script can't answer).
   const res = await fetch(backendUrl, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify(payload),
   });
@@ -65,30 +72,19 @@ function mockCompanyOverlay(companyId) {
   };
 }
 
-function mockMeetingTypes() {
-  return {
-    ok: true,
-    demo: true,
-    notice: MOCK_MODE_NOTICE,
-    meetingTypes: [
-      { id: "discovery", name: "Discovery Call", durationMinutes: 30 },
-      { id: "demo", name: "Product Demo", durationMinutes: 45 },
-      { id: "technical", name: "Technical Deep Dive", durationMinutes: 60 },
-    ],
-  };
-}
-
-function mockAvailability() {
+// Mirrors Code.gs findNextSlots(): { localStart, label, free: [names] }
+function mockNextSlots(duration) {
   const now = Date.now();
   const hour = 60 * 60 * 1000;
-  const slot = (offsetHours, hostName, hostUserId) => {
+  const slot = (offsetHours, free) => {
     const start = new Date(now + offsetHours * hour);
-    const end = new Date(start.getTime() + 30 * 60 * 1000);
     return {
-      startIso: start.toISOString(),
-      endIso: end.toISOString(),
-      hostUserId,
-      hostName,
+      localStart: start.toISOString().slice(0, 16),
+      label:
+        start.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) +
+        " · " +
+        start.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      free,
     };
   };
   return {
@@ -96,10 +92,30 @@ function mockAvailability() {
     demo: true,
     notice: MOCK_MODE_NOTICE,
     slots: [
-      slot(2, "Kiran N", "user-2"),
-      slot(4, "Vishnu Sarma", "user-17"),
-      slot(24, "Kiran N", "user-2"),
+      slot(2, ["Hritik", "Aarushi"]),
+      slot(4, ["Shreya", "Keshav"]),
+      slot(24, ["Hritik"]),
     ],
+  };
+}
+
+// Mirrors Code.gs getBoard(): players[], suggestedPrimary, why, reviewers[]
+function mockBoard(localStart) {
+  return {
+    ok: true,
+    demo: true,
+    notice: MOCK_MODE_NOTICE,
+    slot: { startIso: localStart, duration: 30 },
+    players: [
+      { name: "Hritik", email: "hrithik@enout.in", status: "FREE", line: "Nothing else booked", rank: 1 },
+      { name: "Aarushi", email: "aarushi@enout.in", status: "FREE", line: "1 other meeting today", rank: 3 },
+    ],
+    reviewers: [
+      { name: "Ayush", email: "ayush@enout.in", default: true },
+      { name: "Akash", email: "akash@enout.in", default: true },
+    ],
+    suggestedPrimary: "hrithik@enout.in",
+    why: "2 free. Hritik is highest on the list.",
   };
 }
 
@@ -112,17 +128,21 @@ async function handleRequest(action, payload) {
       });
       return result || mockCompanyOverlay(payload.companyId);
     }
-    case "getMeetingTypes": {
-      const result = await callBackend({ action: "meetingTypes" });
-      return result || mockMeetingTypes();
-    }
-    case "getAvailability": {
+    case "getNextSlots": {
       const result = await callBackend({
-        action: "availability",
-        meetingTypeId: payload.meetingTypeId,
-        contactId: payload.contactId,
+        action: "nextSlots",
+        duration: payload.duration,
+        count: payload.count || 5,
       });
-      return result || mockAvailability();
+      return result || mockNextSlots(payload.duration);
+    }
+    case "getBoard": {
+      const result = await callBackend({
+        action: "board",
+        localStart: payload.localStart,
+        duration: payload.duration,
+      });
+      return result || mockBoard(payload.localStart);
     }
     case "bookMeeting": {
       const result = await postBackend({ action: "bookMeeting", ...payload });
@@ -131,7 +151,10 @@ async function handleRequest(action, payload) {
         ok: true,
         demo: true,
         notice: MOCK_MODE_NOTICE + " No meeting was actually booked.",
-        meetingId: "demo-meeting",
+        primary: "Hritik",
+        when: payload.localStart,
+        link: null,
+        meet: null,
         dealId: "demo-deal",
       };
     }

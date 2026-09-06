@@ -20,10 +20,13 @@ Kylas Contact page   →  "Book Meeting"     →  meeting type → slots → con
 
 - **Extension**: functional, ships with a demo-data fallback so you can load
   it and click through the whole flow before the backend is wired up.
-- **Backend**: not yet built. POC Router needs new JSON API endpoints added —
-  see the contract below. Once `src/Code.gs` / `src/Kylas.gs` / `src/index.html`
-  are available, the endpoint additions can be written to match its existing
-  `PLAYERS` config, `kylasFetch_`, and owner-safety conventions.
+- **Backend**: `src/Code.gs` received — it has `TZ`, `PLAYERS`/`BOOKERS`/
+  `REVIEWERS`, `getBoard()`, `findNextSlots()` and `bookMeeting()`, all of
+  which the new endpoints below wrap directly (no new allocation logic to
+  write). `bookMeeting()` as it stands only touches the calendar — Kylas
+  deal creation isn't in this file, so `src/Kylas.gs` and `src/index.html`
+  are still needed to see how/where that's wired in before the
+  `bookMeeting`/`addNotes` endpoints below can be finished.
 
 ## Load the extension (unpacked, for development)
 
@@ -49,7 +52,11 @@ params; writes are `POST` with a JSON body sent as `text/plain` (to avoid a
 CORS preflight Apps Script can't answer). Every response is JSON:
 `{ "ok": true, ... }` or `{ "ok": false, "error": "..." }`.
 
-### `GET ?action=companyOverlay&companyId=<kylasCompanyId>`
+Two of the four endpoints below are thin wrappers around functions that
+already exist in `Code.gs` — no new allocation logic needed for those. The
+other two depend on `Kylas.gs`, not yet seen.
+
+### `GET ?action=companyOverlay&companyId=<kylasCompanyId>` — status: pending Kylas.gs
 Looks up the Airtable **Company Database / Company List** record where
 `Kylas Company Id` matches, and returns its fields flattened.
 
@@ -71,44 +78,52 @@ Looks up the Airtable **Company Database / Company List** record where
 renders whatever keys come back, no schema change needed on the extension
 side to add more curated columns later.
 
-### `GET ?action=meetingTypes`
-Returns the meeting types a BD can book (maps to `PLAYERS` / pipeline config
-in POC Router).
-
-```json
-{ "ok": true, "meetingTypes": [{ "id": "discovery", "name": "Discovery Call", "durationMinutes": 30 }] }
-```
-
-### `GET ?action=availability&meetingTypeId=<id>&contactId=<kylasContactId>`
-Runs POC Router's existing calendar-availability + allocation logic and
-returns candidate slots.
+### `GET ?action=nextSlots&duration=<mins>&count=<n>` — status: confirmed, wraps `findNextSlots()`
+Direct passthrough to `Code.gs`'s existing `findNextSlots(duration, count)` —
+same scan window (`SCAN_DAYS`), same work-hours rules. Response reshaped
+slightly for the extension (`localStart` kept so a follow-up `getBoard` call
+can use it verbatim):
 
 ```json
 {
   "ok": true,
   "slots": [
-    { "startIso": "2026-09-08T09:00:00.000Z", "endIso": "2026-09-08T09:30:00.000Z", "hostUserId": "2", "hostName": "Kiran N" }
+    { "localStart": "2026-09-08T09:00", "label": "Tue 8 Sep · 09:00", "free": ["Hritik", "Aarushi"] }
   ]
 }
 ```
 
-### `POST` `{ "action": "bookMeeting", "contactId": "...", "meetingTypeId": "...", "slot": {...}, "notes": "..." }`
-Does everything the platform requirement asks for in one call:
-1. Blocks the slot on the host's calendar (existing POC Router logic).
-2. Creates the Kylas deal (`ownedBy` = the assigned host, company/contact
-   resolved from the Kylas contact record — deal name, company, contact,
-   deal size as already defined in `Kylas.gs`).
-3. Updates the contact's status to **Discovery Call**.
-4. If `notes` is non-empty, attaches it as a Kylas Note on the new deal
+### `GET ?action=board&localStart=<...>&duration=<mins>` — status: confirmed, wraps `getBoard()`
+Called once the BD picks one of the slots above, to get the suggested POC
+and full per-player status before showing the confirm step. Passthrough of
+`getBoard(localStart, duration)`'s existing response shape (`players`,
+`suggestedPrimary`, `why`, `reviewers`, `slot`, etc. — see `Code.gs` §4).
+
+### `POST` `{ "action": "bookMeeting", "you": "<booker email>", "primaryEmail": "<POC email>", "localStart": "...", "duration": 30, "title": "...", "company": "...", "callType": "...", "reviewers": [...], "externals": [...], "notes": "..." }` — status: partially confirmed
+`you`, `primaryEmail`, `localStart`, `duration`, `title`, `company`,
+`callType`, `reviewers`, `externals` map 1:1 onto `Code.gs`'s existing
+`bookMeeting(payload)` — that part just works. **Still open, pending
+Kylas.gs**: where deal creation / contact status update / notes attach
+happen. Per the platform requirement these need to happen in this same
+call:
+1. Block the slot (existing `bookMeeting` — confirmed).
+2. Create the Kylas deal, `ownedBy` = the assigned POC (needs company ID +
+   contact ID + deal size — the extension only has a Kylas *contact* ID
+   from the page URL, so the deal's company/contact linkage has to be
+   resolved server-side from the contact record, the way `Kylas.gs` already
+   does for other flows).
+3. Update the contact's status to **Discovery Call**.
+4. If `notes` is non-empty, attach it as a Kylas Note on the new deal
    (`POST /v1/notes/relation`, `targetEntityType: "DEAL"`).
 
+Response (calendar part confirmed, `dealId` pending):
 ```json
-{ "ok": true, "meetingId": "...", "dealId": "..." }
+{ "ok": true, "primary": "Hritik", "when": "...", "link": "...", "meet": "...", "dealId": "..." }
 ```
 
-### `POST` `{ "action": "addNotes", "dealId": "...", "contactId": "...", "notes": "..." }`
+### `POST` `{ "action": "addNotes", "dealId": "...", "contactId": "...", "notes": "..." }` — status: pending Kylas.gs
 Standalone note capture (used after a call, independent of booking) —
-same `notes/relation` call, `targetEntityId` = `dealId` if present, else
+`notes/relation` call, `targetEntityId` = `dealId` if present, else
 `contactId`.
 
 ```json

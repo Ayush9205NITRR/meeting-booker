@@ -1,17 +1,33 @@
 // Runs on https://app.kylas.io/sales/contacts/details/<id>
-// Adds a "Book Meeting" overlay: pick a meeting type -> pick a free slot ->
-// confirm. The backend (POC Router) does availability, calendar blocking,
-// deal creation and the contact status update to "Discovery Call".
+// Adds a "Book Meeting" overlay that mirrors POC Router's actual flow:
+// pick a call type (duration) -> see next open slots -> see the board
+// (suggested POC + who's free) -> confirm. The backend does calendar
+// blocking (Code.gs bookMeeting), and — once Kylas.gs is wired in — Kylas
+// deal creation, the contact status update, and the notes attach.
 // A second "Add meeting notes" box lets the BD drop in qualitative notes
-// any time after the call — it's independent of the booking step.
+// any time after the call — independent of the booking step.
 
 (function () {
   const CONTACT_PATH = /\/sales\/contacts\/details\/(\d+)/;
 
+  // Call types are a client-side convenience over POC Router's raw
+  // duration/callType fields — there's no server-side "meeting type" list.
+  const CALL_TYPES = [
+    { id: "discovery", name: "Discovery Call", duration: 30 },
+    { id: "demo", name: "Product Demo", duration: 45 },
+    { id: "technical", name: "Technical Deep Dive", duration: 60 },
+  ];
+
   let currentContactId = null;
-  let selectedMeetingType = null;
+  let selectedCallType = null;
   let selectedSlot = null;
+  let selectedBoard = null;
   let lastDealId = null;
+
+  async function getBookerEmail() {
+    const { bookerEmail } = await chrome.storage.sync.get("bookerEmail");
+    return bookerEmail || null;
+  }
 
   function renderIdle(panel) {
     panel.setBody(`
@@ -24,8 +40,13 @@
       </div>
     `);
 
-    panel.body.querySelector("#ko-book-btn").addEventListener("click", () => {
-      loadMeetingTypes(panel);
+    panel.body.querySelector("#ko-book-btn").addEventListener("click", async () => {
+      const booker = await getBookerEmail();
+      if (!booker) {
+        renderNeedsBookerEmail(panel);
+        return;
+      }
+      renderCallTypes(panel);
     });
 
     panel.body.querySelector("#ko-save-standalone-notes").addEventListener("click", async (e) => {
@@ -52,6 +73,17 @@
     });
   }
 
+  function renderNeedsBookerEmail(panel) {
+    panel.setBody(`
+      <div class="ko-error">
+        Set your email in the extension popup first (it must be one of
+        POC Router's BOOKERS) — that's who the invite is booked as.
+      </div>
+      <button class="ko-secondary-btn" id="ko-back">Back</button>
+    `);
+    panel.body.querySelector("#ko-back").addEventListener("click", () => renderIdle(panel));
+  }
+
   function renderLoading(panel, message) {
     panel.setBody(`<div class="ko-loading">${KylasOverlay.escapeHtml(message)}</div>`);
   }
@@ -64,72 +96,50 @@
     panel.body.querySelector("#ko-back").addEventListener("click", backAction);
   }
 
-  async function loadMeetingTypes(panel) {
-    renderLoading(panel, "Loading meeting types…");
-    try {
-      const response = await KylasOverlay.request("getMeetingTypes", {});
-      if (!response || response.ok === false) {
-        renderError(panel, response?.error || "Could not load meeting types.", () =>
-          renderIdle(panel)
-        );
-        return;
-      }
-      renderMeetingTypes(panel, response);
-    } catch (err) {
-      renderError(panel, String(err), () => renderIdle(panel));
-    }
-  }
-
-  function renderMeetingTypes(panel, response) {
-    const notice = response.demo
-      ? `<div class="ko-notice">${KylasOverlay.escapeHtml(response.notice)}</div>`
-      : "";
-    const options = response.meetingTypes
-      .map(
-        (mt) => `
+  function renderCallTypes(panel) {
+    const options = CALL_TYPES.map(
+      (ct) => `
         <label class="ko-radio-row">
-          <input type="radio" name="ko-meeting-type" value="${mt.id}">
-          ${KylasOverlay.escapeHtml(mt.name)}
-          <span class="ko-muted">${mt.durationMinutes}m</span>
+          <input type="radio" name="ko-call-type" value="${ct.id}">
+          ${KylasOverlay.escapeHtml(ct.name)}
+          <span class="ko-muted">${ct.duration}m</span>
         </label>`
-      )
-      .join("");
+    ).join("");
 
     panel.setBody(`
-      ${notice}
-      <div class="ko-step-title">1. Meeting type</div>
+      <div class="ko-step-title">1. Call type</div>
       ${options}
-      <button class="ko-primary-btn" id="ko-continue-availability" disabled>Check availability</button>
+      <button class="ko-primary-btn" id="ko-continue-slots" disabled>See open slots</button>
       <button class="ko-secondary-btn" id="ko-back">Back</button>
     `);
 
-    const continueBtn = panel.body.querySelector("#ko-continue-availability");
-    panel.body.querySelectorAll('input[name="ko-meeting-type"]').forEach((input) => {
+    const continueBtn = panel.body.querySelector("#ko-continue-slots");
+    panel.body.querySelectorAll('input[name="ko-call-type"]').forEach((input) => {
       input.addEventListener("change", () => {
-        selectedMeetingType = input.value;
+        selectedCallType = CALL_TYPES.find((ct) => ct.id === input.value);
         continueBtn.disabled = false;
       });
     });
-    continueBtn.addEventListener("click", () => loadAvailability(panel));
+    continueBtn.addEventListener("click", () => loadNextSlots(panel));
     panel.body.querySelector("#ko-back").addEventListener("click", () => renderIdle(panel));
   }
 
-  async function loadAvailability(panel) {
-    renderLoading(panel, "Checking calendars…");
+  async function loadNextSlots(panel) {
+    renderLoading(panel, "Scanning calendars for open slots…");
     try {
-      const response = await KylasOverlay.request("getAvailability", {
-        meetingTypeId: selectedMeetingType,
-        contactId: currentContactId,
+      const response = await KylasOverlay.request("getNextSlots", {
+        duration: selectedCallType.duration,
+        count: 5,
       });
       if (!response || response.ok === false) {
-        renderError(panel, response?.error || "Could not load availability.", () =>
-          loadMeetingTypes(panel)
+        renderError(panel, response?.error || "Could not load open slots.", () =>
+          renderCallTypes(panel)
         );
         return;
       }
       renderSlots(panel, response);
     } catch (err) {
-      renderError(panel, String(err), () => loadMeetingTypes(panel));
+      renderError(panel, String(err), () => renderCallTypes(panel));
     }
   }
 
@@ -141,29 +151,21 @@
     if (!response.slots?.length) {
       panel.setBody(
         notice +
-          `<div class="ko-empty">No free slots found.</div>
+          `<div class="ko-empty">No open slots found in the next few days.</div>
            <button class="ko-secondary-btn" id="ko-back">Back</button>`
       );
-      panel.body.querySelector("#ko-back").addEventListener("click", () => loadMeetingTypes(panel));
+      panel.body.querySelector("#ko-back").addEventListener("click", () => renderCallTypes(panel));
       return;
     }
 
     const options = response.slots
-      .map((slot, i) => {
-        const start = new Date(slot.startIso);
-        const label = start.toLocaleString(undefined, {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        });
-        return `
+      .map(
+        (slot, i) => `
           <button class="ko-slot-btn" data-index="${i}">
-            ${KylasOverlay.escapeHtml(label)}
-            <span class="ko-muted">${KylasOverlay.escapeHtml(slot.hostName)}</span>
-          </button>`;
-      })
+            ${KylasOverlay.escapeHtml(slot.label)}
+            <span class="ko-muted">${KylasOverlay.escapeHtml((slot.free || []).join(", "))}</span>
+          </button>`
+      )
       .join("");
 
     panel.setBody(`
@@ -176,22 +178,76 @@
     panel.body.querySelectorAll(".ko-slot-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         selectedSlot = response.slots[Number(btn.dataset.index)];
-        renderConfirm(panel);
+        loadBoard(panel);
       });
     });
-    panel.body.querySelector("#ko-back").addEventListener("click", () => loadMeetingTypes(panel));
+    panel.body.querySelector("#ko-back").addEventListener("click", () => renderCallTypes(panel));
   }
 
-  function renderConfirm(panel) {
-    const start = new Date(selectedSlot.startIso).toLocaleString();
+  async function loadBoard(panel) {
+    renderLoading(panel, "Checking who's free at that time…");
+    try {
+      const response = await KylasOverlay.request("getBoard", {
+        localStart: selectedSlot.localStart,
+        duration: selectedCallType.duration,
+      });
+      if (!response || response.ok === false) {
+        renderError(panel, response?.error || "Could not load the board.", () =>
+          loadNextSlots(panel)
+        );
+        return;
+      }
+      selectedBoard = response;
+      renderConfirm(panel, response);
+    } catch (err) {
+      renderError(panel, String(err), () => loadNextSlots(panel));
+    }
+  }
+
+  function renderConfirm(panel, board) {
+    const notice = board.demo
+      ? `<div class="ko-notice">${KylasOverlay.escapeHtml(board.notice)}</div>`
+      : "";
+
+    const playerOptions = board.players
+      .map(
+        (p) => `
+        <label class="ko-radio-row">
+          <input type="radio" name="ko-primary" value="${p.email}" ${
+          p.email === board.suggestedPrimary ? "checked" : ""
+        }>
+          ${KylasOverlay.escapeHtml(p.name)}
+          <span class="ko-muted">${KylasOverlay.escapeHtml(p.status)}</span>
+        </label>`
+      )
+      .join("");
+
+    const reviewerOptions = (board.reviewers || [])
+      .map(
+        (r) => `
+        <label class="ko-radio-row">
+          <input type="checkbox" name="ko-reviewer" value="${r.email}" ${r.default ? "checked" : ""}>
+          ${KylasOverlay.escapeHtml(r.name)}
+        </label>`
+      )
+      .join("");
+
     panel.setBody(`
+      ${notice}
       <div class="ko-step-title">3. Confirm</div>
       <div class="ko-row"><div class="ko-row-label">When</div><div class="ko-row-value">${KylasOverlay.escapeHtml(
-        start
+        selectedSlot.label
       )}</div></div>
-      <div class="ko-row"><div class="ko-row-label">Host</div><div class="ko-row-value">${KylasOverlay.escapeHtml(
-        selectedSlot.hostName
-      )}</div></div>
+      <div class="ko-row-label">${KylasOverlay.escapeHtml(board.why || "POC")}</div>
+      ${playerOptions}
+      <label class="ko-row-label">Title</label>
+      <input type="text" id="ko-title" value="${KylasOverlay.escapeHtml(selectedCallType.name)}">
+      <label class="ko-row-label">Company (free text)</label>
+      <input type="text" id="ko-company" placeholder="Company name">
+      <label class="ko-row-label">Reviewers</label>
+      ${reviewerOptions}
+      <label class="ko-row-label">Client emails (comma-separated)</label>
+      <input type="text" id="ko-externals" placeholder="client@company.com">
       <label class="ko-row-label">Notes (optional)</label>
       <textarea id="ko-confirm-notes" placeholder="Anything to capture before the call…"></textarea>
       <button class="ko-primary-btn" id="ko-confirm-book">Confirm booking</button>
@@ -199,20 +255,43 @@
       <div id="ko-confirm-status"></div>
     `);
 
-    panel.body.querySelector("#ko-back").addEventListener("click", () =>
-      loadAvailability(panel)
-    );
+    panel.body.querySelector("#ko-back").addEventListener("click", () => loadNextSlots(panel));
     panel.body.querySelector("#ko-confirm-book").addEventListener("click", async (e) => {
       const btn = e.target;
       const status = panel.body.querySelector("#ko-confirm-status");
+      const primaryEmail = panel.body.querySelector('input[name="ko-primary"]:checked')?.value;
+      const title = panel.body.querySelector("#ko-title").value.trim();
+      const company = panel.body.querySelector("#ko-company").value.trim();
       const notes = panel.body.querySelector("#ko-confirm-notes").value.trim();
+      const externals = panel.body
+        .querySelector("#ko-externals")
+        .value.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const reviewers = [...panel.body.querySelectorAll('input[name="ko-reviewer"]:checked')].map(
+        (el) => el.value
+      );
+
+      if (!title) {
+        status.textContent = "Title is required.";
+        return;
+      }
+
       btn.disabled = true;
       status.textContent = "Booking…";
       try {
+        const you = await getBookerEmail();
         const response = await KylasOverlay.request("bookMeeting", {
+          you,
+          primaryEmail,
+          localStart: selectedSlot.localStart,
+          duration: selectedCallType.duration,
+          title,
+          company,
+          callType: selectedCallType.id,
+          reviewers,
+          externals,
           contactId: currentContactId,
-          meetingTypeId: selectedMeetingType,
-          slot: selectedSlot,
           notes,
         });
         if (!response || response.ok === false) {
@@ -233,9 +312,15 @@
     const notice = response.demo
       ? `<div class="ko-notice">${KylasOverlay.escapeHtml(response.notice)}</div>`
       : "";
+    const link = response.link
+      ? `<div class="ko-row"><div class="ko-row-label">Calendar</div><div class="ko-row-value"><a href="${response.link}" target="_blank" rel="noopener">Open event</a></div></div>`
+      : "";
     panel.setBody(`
       ${notice}
-      <div class="ko-success">Meeting booked. Deal created and contact moved to Discovery Call.</div>
+      <div class="ko-success">Booked with ${KylasOverlay.escapeHtml(
+        response.primary || "the assigned POC"
+      )}.</div>
+      ${link}
       <button class="ko-secondary-btn" id="ko-done">Done</button>
     `);
     panel.body.querySelector("#ko-done").addEventListener("click", () => renderIdle(panel));
@@ -249,8 +334,9 @@
 
   KylasOverlay.watchRecordId(CONTACT_PATH, (contactId) => {
     currentContactId = contactId;
-    selectedMeetingType = null;
+    selectedCallType = null;
     selectedSlot = null;
+    selectedBoard = null;
     lastDealId = null;
     renderIdle(panel);
   });

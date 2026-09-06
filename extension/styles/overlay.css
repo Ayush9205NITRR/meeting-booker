@@ -177,15 +177,20 @@
   background: #f0f4ff;
 }
 
-textarea {
+textarea,
+input[type="text"] {
   width: 100%;
-  min-height: 60px;
   border-radius: 6px;
   border: 1px solid #d8dce1;
   padding: 8px;
   font-family: inherit;
   font-size: 13px;
   box-sizing: border-box;
+  margin-bottom: 8px;
+}
+
+textarea {
+  min-height: 60px;
   resize: vertical;
 }
 
