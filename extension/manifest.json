@@ -15,14 +15,18 @@
     {
       "matches": ["https://app.kylas.io/sales/companies/details/*"],
       "js": ["content/shared.js", "content/company-overlay.js"],
-      "css": ["styles/overlay.css"],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://app.kylas.io/sales/contacts/details/*"],
       "js": ["content/shared.js", "content/contact-overlay.js"],
-      "css": ["styles/overlay.css"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["styles/overlay.css"],
+      "matches": ["https://app.kylas.io/*"]
     }
   ],
   "action": {
