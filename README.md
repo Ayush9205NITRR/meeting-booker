@@ -36,7 +36,10 @@ needs **only an Airtable token** — no server, nothing deployed.
 ### Company overlay (2 minutes)
 
 1. `chrome://extensions` → enable **Developer mode**.
-2. **Load unpacked** → select the `extension/` folder in this repo.
+2. **Load unpacked** → select the **`extension/`** folder, *not* the repo
+   root. Chrome needs the folder that directly contains `manifest.json`;
+   pointing it at `meeting-booker/` gives "Manifest file is missing or
+   unreadable".
 3. Create a **read-only** Airtable personal access token at
    <https://airtable.com/create/tokens> with scope `data.records:read` and
    access to the company base (`app55PsyRKqkf2CAQ`).
@@ -198,6 +201,14 @@ Standalone note capture (used after a call, independent of booking) —
 ```
 
 ## Repo layout
+
+`extension/` is what Chrome loads — the manifest is in there, not at the
+repo root.
+
+Both content scripts match all of `app.kylas.io`, not just the detail
+paths, and each shows itself only on its own record type. Kylas routes
+client-side, so a script matched to `/details/*` is never injected when a
+BD clicks in from a list — it would only appear on a direct load.
 
 ```
 extension/

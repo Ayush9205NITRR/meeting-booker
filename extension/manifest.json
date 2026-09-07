@@ -17,7 +17,6 @@
   },
   "content_scripts": [
     {
-      "_comment": "Matched across all of Kylas, not just the detail paths. Kylas routes client-side, so a script matched to /details/* is never injected when a BD clicks in from a list — it only appears on a direct load. Each script watches the URL and shows itself on its own record type.",
       "matches": ["https://app.kylas.io/*"],
       "js": [
         "config/field-map.js",
