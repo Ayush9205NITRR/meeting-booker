@@ -1154,3 +1154,40 @@ textarea {
 .ko-skel:last-child {
   border-bottom: 0;
 }
+
+/* Three-way type selector — wraps rather than squeezing the labels. */
+.ko-seg-3 {
+  display: flex;
+  width: 100%;
+}
+
+.ko-seg-3 button {
+  flex: 1;
+  padding: 7px 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.ko-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ko-two .ko-select {
+  font-size: 13.5px;
+  padding: 9px 10px;
+}
+
+/* Company and contact are shown, not typed — they come from the record. */
+.ko-assoc {
+  margin-top: 10px;
+  padding: 10px 11px;
+  background: var(--ko-surface-2);
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+}
+
+.ko-assoc .ko-kv {
+  padding: 2px 0;
+}

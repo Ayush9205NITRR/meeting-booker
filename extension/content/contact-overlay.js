@@ -17,9 +17,19 @@
   const CONTACT_PATH = /\/sales\/contacts\/details\/(\d+)/;
   const REFRESH_MS = 45000;
 
+  // The three deal types. `pipelineHint` is matched against the pipeline
+  // names Kylas returns so the right one is preselected — the BD can always
+  // override with the dropdown, so a miss costs a click, not a wrong deal.
+  const TYPES = [
+    { id: "Requirement", label: "Active requirement", deal: "Active Requirement", pipelineHint: "requirement" },
+    { id: "Discovery", label: "Discovery", deal: "Discovery Call", pipelineHint: "discovery" },
+    { id: "DemandFunnel", label: "Demand funnel", deal: "Demand Funnel", pipelineHint: "demand" },
+  ];
+  const typeOf = (id) => TYPES.find((t) => t.id === id) || TYPES[0];
+
   const state = {
     contactId: null,
-    callType: "Requirement", // or "Discovery"
+    callType: "Requirement", // Requirement | Discovery | DemandFunnel
     company: "",
     extra: "",
     title: "",
@@ -32,6 +42,15 @@
     busy: false,
     booked: null,
     error: null,
+
+    // Deal. Only these six things are ever asked for.
+    pipelines: null,      // [{id,name,stages:[{id,name}]}]
+    pipelineId: "",
+    stageId: "",
+    dealName: "",
+    dealNameEdited: false,
+    dealValue: "",
+    assoc: null,          // { contact:{id,name}, company:{id,name} } from Kylas
   };
 
   let refreshTimer = null;
@@ -108,6 +127,29 @@
         : `${c} <> Enout | ${x || "[Last event]"}`;
   }
 
+  function buildDealName() {
+    if (state.dealNameEdited) return;
+    const co =
+      (state.assoc && state.assoc.company && state.assoc.company.name) ||
+      state.company.trim();
+    state.dealName = co ? `${co} — ${typeOf(state.callType).deal}` : typeOf(state.callType).deal;
+  }
+
+  // Preselect the pipeline whose name matches the chosen type, and its
+  // FIRST stage — that's the whole setup for Demand Funnel, and the same
+  // default is right for the other two.
+  function applyPipelineDefault() {
+    if (!state.pipelines || !state.pipelines.length) return;
+    const hint = typeOf(state.callType).pipelineHint;
+    const match =
+      state.pipelines.find((p) => p.name.toLowerCase().includes(hint)) || state.pipelines[0];
+    state.pipelineId = String(match.id);
+    state.stageId = match.stages.length ? String(match.stages[0].id) : "";
+  }
+
+  const currentPipeline = () =>
+    (state.pipelines || []).find((p) => String(p.id) === String(state.pipelineId)) || null;
+
   // ── rendering ─────────────────────────────────────────────
 
   function render() {
@@ -141,9 +183,11 @@
       ${noticesHtml()}
 
       <div class="ko-step"><span class="ko-n">1</span><h2>Name the invite</h2></div>
-      <div class="ko-seg">
-        <button id="ko-t-req" class="${isReq ? "on" : ""}">Active requirement</button>
-        <button id="ko-t-disc" class="${isReq ? "" : "on"}">Discovery</button>
+      <div class="ko-seg ko-seg-3">
+        ${TYPES.map(
+          (t) =>
+            `<button data-type="${t.id}" class="${t.id === state.callType ? "on" : ""}">${esc(t.label)}</button>`
+        ).join("")}
       </div>
       <label class="ko-lb">Company</label>
       <input type="text" id="ko-company" placeholder="Acme Pvt Ltd" value="${esc(state.company)}">
@@ -172,6 +216,7 @@
       <div class="ko-list" id="ko-roster">${rosterHtml()}</div>
 
       ${b ? guestsHtml() : ""}
+      ${dealHtml()}
 
       <div class="ko-actbar">
         ${flagHtml()}
@@ -287,6 +332,71 @@
       </div>`;
   }
 
+  // Six fields, nothing else. Company and contact are resolved from the
+  // record rather than asked for, so they're shown, not typed.
+  function dealHtml() {
+    buildDealName();
+    const pipe = currentPipeline();
+    const co = state.assoc && state.assoc.company;
+    const ct = state.assoc && state.assoc.contact;
+
+    return `
+      <div class="ko-step"><span class="ko-n">5</span><h2>Deal</h2>
+        <span class="ko-sub">created on booking</span></div>
+
+      <label class="ko-lb">Deal name</label>
+      <input type="text" id="ko-deal-name" value="${esc(state.dealName)}">
+
+      <div class="ko-two">
+        <div>
+          <label class="ko-lb">Pipeline</label>
+          <select id="ko-pipeline" class="ko-select">
+            ${
+              state.pipelines
+                ? state.pipelines
+                    .map(
+                      (p) =>
+                        `<option value="${esc(p.id)}"${
+                          String(p.id) === String(state.pipelineId) ? " selected" : ""
+                        }>${esc(p.name)}</option>`
+                    )
+                    .join("")
+                : `<option>Loading…</option>`
+            }
+          </select>
+        </div>
+        <div>
+          <label class="ko-lb">Stage</label>
+          <select id="ko-stage" class="ko-select">
+            ${
+              pipe
+                ? pipe.stages
+                    .map(
+                      (s) =>
+                        `<option value="${esc(s.id)}"${
+                          String(s.id) === String(state.stageId) ? " selected" : ""
+                        }>${esc(s.name)}</option>`
+                    )
+                    .join("")
+                : `<option>—</option>`
+            }
+          </select>
+        </div>
+      </div>
+
+      <label class="ko-lb">Deal value</label>
+      <input type="text" id="ko-deal-value" placeholder="e.g. 250000" value="${esc(state.dealValue)}">
+
+      <div class="ko-assoc">
+        <div class="ko-kv"><span>Company</span><span>${
+          co ? esc(co.name) : '<span class="ko-empty-value">resolving from contact…</span>'
+        }</span></div>
+        <div class="ko-kv"><span>Contact</span><span>${
+          ct ? esc(ct.name) : `#${esc(state.contactId || "")}`
+        }</span></div>
+      </div>`;
+  }
+
   function everyOn() {
     return (
       state.board && state.board.reviewers.every((r) => state.revSel[r.email])
@@ -360,8 +470,24 @@
     $("#ko-time").addEventListener("change", (e) => { state.time = e.target.value; load(); });
     $("#ko-dur").addEventListener("change", (e) => { state.duration = Number(e.target.value); load(); });
 
-    $("#ko-t-req").addEventListener("click", () => setType("Requirement"));
-    $("#ko-t-disc").addEventListener("click", () => setType("Discovery"));
+    panel.body.querySelectorAll(".ko-seg button").forEach((btn) => {
+      btn.addEventListener("click", () => setType(btn.getAttribute("data-type")));
+    });
+
+    $("#ko-deal-name").addEventListener("input", (e) => {
+      state.dealName = e.target.value;
+      state.dealNameEdited = true;
+    });
+    $("#ko-deal-value").addEventListener("input", (e) => { state.dealValue = e.target.value; });
+    $("#ko-pipeline").addEventListener("change", (e) => {
+      state.pipelineId = e.target.value;
+      const p = currentPipeline();
+      // A stage from the old pipeline is meaningless here, so land on the
+      // new pipeline's first stage.
+      state.stageId = p && p.stages.length ? String(p.stages[0].id) : "";
+      render();
+    });
+    $("#ko-stage").addEventListener("change", (e) => { state.stageId = e.target.value; });
 
     // Re-render on each keystroke would steal focus, so update the title
     // preview in place instead.
@@ -443,6 +569,10 @@
   function setType(type) {
     state.callType = type;
     buildTitle();
+    // Switching type re-points the deal at that type's pipeline and first
+    // stage — the whole Demand Funnel setup is one click.
+    applyPipelineDefault();
+    buildDealName();
     render();
   }
 
@@ -491,6 +621,35 @@
     }
   }
 
+  // Deal setup, fetched once per contact. Neither of these should be able
+  // to break booking, so a failure just leaves the dropdown or the company
+  // line empty rather than surfacing an error over the whole panel.
+  async function loadDealSetup() {
+    if (!state.pipelines) {
+      try {
+        const res = await KylasOverlay.request("getDealPipelines", {});
+        if (res && res.ok && res.pipelines && res.pipelines.length) {
+          state.pipelines = res.pipelines;
+          applyPipelineDefault();
+          render();
+        }
+      } catch (e) {
+        /* dropdown stays on "Loading…"; booking still works */
+      }
+    }
+
+    try {
+      const res = await KylasOverlay.request("getContact", { contactId: state.contactId });
+      if (res && res.ok) {
+        state.assoc = res;
+        buildDealName();
+        render();
+      }
+    } catch (e) {
+      /* company line stays unresolved */
+    }
+  }
+
   async function book() {
     if (!canBook()) return;
 
@@ -523,9 +682,19 @@
           .filter((r) => state.revSel[r.email])
           .map((r) => r.email),
         externals: state.externals,
-        // The backend resolves the company and deal value from this, so the
-        // deal lands on the right account without the BD retyping anything.
         contactId: state.contactId,
+        // Six fields, exactly. Company and contact go as ids resolved from
+        // the record, so the deal lands on the right account without the BD
+        // retyping anything the CRM already knows.
+        deal: {
+          name: state.dealName.trim(),
+          type: typeOf(state.callType).deal,
+          pipelineId: state.pipelineId,
+          stageId: state.stageId,
+          value: state.dealValue.trim(),
+          companyId: state.assoc && state.assoc.company ? state.assoc.company.id : null,
+          contactId: state.contactId,
+        },
       });
       state.booked = res;
       if (res && res.ok) state.externals = [];
@@ -550,11 +719,14 @@
     state.contactId = contactId;
     state.booked = null;
     state.error = null;
+    state.assoc = null;
+    state.dealNameEdited = false;
     panel.setHeader({
       name: "Book Meeting",
       avatar: "📅",
       subtitleHtml: `Contact #${esc(contactId)}`,
     });
     load();
+    loadDealSetup();
   });
 })();

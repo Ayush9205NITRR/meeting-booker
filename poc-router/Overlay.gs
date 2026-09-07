@@ -69,6 +69,10 @@ function overlayApi_(e) {
     switch (params.action) {
       case 'companyOverlay':
         return overlayJson_(overlayCompany_(params.companyId));
+      case 'dealPipelines':
+        return overlayJson_({ ok: true, pipelines: overlayDealPipelines_() });
+      case 'contact':
+        return overlayJson_(overlayContact_(params.contactId));
       case 'ping':
         return overlayJson_({ ok: true, pong: true });
       default:
@@ -300,6 +304,96 @@ function overlayStringify_(value) {
   return String(value);
 }
 
+// ============ KYLAS READS ============
+//
+// Read-only. Deliberately no PUT and no deal creation here: tools/check.js
+// fails the build on a PUT outside kylasUpdateContact_, and deal writes
+// belong in Kylas.gs beside the pipeline/stage config and the owner-safety
+// rules. These two endpoints only feed the overlay's dropdowns.
+
+function overlayKylasKey_() {
+  const key = PropertiesService.getScriptProperties().getProperty('KYLAS_API_KEY');
+  if (!key) throw new Error('KYLAS_API_KEY is not set in Script Properties.');
+  return key;
+}
+
+function overlayKylasGet_(path) {
+  const res = UrlFetchApp.fetch('https://api.kylas.io' + path, {
+    method: 'get',
+    headers: { 'api-key': overlayKylasKey_(), Accept: 'application/json' },
+    muteHttpExceptions: true
+  });
+  const code = res.getResponseCode();
+  const body = res.getContentText();
+  if (code === 401 || code === 403) throw new Error('Kylas rejected the API key (' + code + ').');
+  if (code !== 200) throw new Error('Kylas returned ' + code + ' for ' + path + ': ' + body.slice(0, 200));
+  return JSON.parse(body);
+}
+
+/**
+ * Deal pipelines with their stages, for the overlay's dropdowns.
+ *
+ * Kylas has moved this payload's shape around between versions, so read
+ * defensively: the list may arrive as `content`, `data` or a bare array,
+ * and stages may be `stages` or `pipelineStages`. Anything we can't read
+ * comes back as an empty stage list rather than throwing, so one odd
+ * pipeline doesn't take out the whole dropdown.
+ */
+function overlayDealPipelines_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('overlayPipelines');
+  if (cached) return JSON.parse(cached);
+
+  const raw = overlayKylasGet_('/v1/pipelines/search?page=0&size=100&sort=updatedAt,desc');
+  const list = raw.content || raw.data || (Array.isArray(raw) ? raw : []);
+
+  const pipelines = list
+    .filter(function (p) {
+      const type = String(p.entityType || p.entity || '').toLowerCase();
+      // Keep deal pipelines; if a tenant doesn't set entityType, keep it
+      // rather than silently offering nothing.
+      return !type || type === 'deal';
+    })
+    .filter(function (p) { return p.active !== false; })
+    .map(function (p) {
+      const stages = p.stages || p.pipelineStages || [];
+      return {
+        id: p.id,
+        name: p.name || ('Pipeline ' + p.id),
+        stages: stages.map(function (s) {
+          return { id: s.id, name: s.name || ('Stage ' + s.id) };
+        })
+      };
+    });
+
+  cache.put('overlayPipelines', JSON.stringify(pipelines), 600);
+  return pipelines;
+}
+
+/**
+ * The contact, and the company it belongs to. This is what lets a deal be
+ * created without the BD retyping anything: the overlay only knows a
+ * contact id from the page URL.
+ */
+function overlayContact_(contactId) {
+  const id = String(contactId == null ? '' : contactId).trim();
+  if (!id) throw new Error('contactId is required.');
+
+  const c = overlayKylasGet_('/v1/contacts/' + encodeURIComponent(id));
+  const company = c.company || (c.companies && c.companies[0]) || null;
+
+  return {
+    ok: true,
+    contact: {
+      id: c.id || id,
+      name: [c.firstName, c.lastName].filter(String).join(' ').trim() || c.name || ''
+    },
+    company: company
+      ? { id: company.id, name: company.name || '' }
+      : null
+  };
+}
+
 // ============ SELF TEST — run from the editor ============
 
 function overlaySelfTest() {
@@ -328,6 +422,23 @@ function overlaySelfTest() {
     }
   } catch (err) {
     Logger.log('Overlay Config table: FAILED — ' + err.message);
+  }
+  Logger.log('');
+
+  // Prints the deal pipelines and stage ids the overlay will offer, so the
+  // names can be checked against Kylas without guessing.
+  try {
+    const pipelines = overlayDealPipelines_();
+    Logger.log('Deal pipelines: ' + pipelines.length);
+    pipelines.forEach(function (p) {
+      Logger.log('  [' + p.id + '] ' + p.name);
+      p.stages.forEach(function (s, i) {
+        Logger.log('        ' + (i === 0 ? '(first) ' : '        ') + '[' + s.id + '] ' + s.name);
+      });
+      if (!p.stages.length) Logger.log('        no stages returned — check the payload shape');
+    });
+  } catch (err) {
+    Logger.log('Deal pipelines: FAILED — ' + err.message);
   }
   Logger.log('');
 

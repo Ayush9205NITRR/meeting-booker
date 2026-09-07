@@ -188,6 +188,20 @@ async function handleRequest(action, payload) {
       });
       return result || mockBoard(payload.localStart);
     }
+    // Deal setup. Both come from Kylas via POC Router, so without a
+    // backend they return empty rather than mock data — a fake pipeline id
+    // would create a deal in the wrong place the moment one is configured.
+    case "getDealPipelines": {
+      const result = await callBackend({ action: "dealPipelines" });
+      return result || { ok: true, pipelines: [] };
+    }
+    case "getContact": {
+      const result = await callBackend({
+        action: "contact",
+        contactId: payload.contactId,
+      });
+      return result || { ok: false, error: "No backend configured." };
+    }
     case "bookMeeting": {
       const result = await postBackend({ action: "bookMeeting", ...payload });
       if (result) return result;
