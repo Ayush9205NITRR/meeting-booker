@@ -167,3 +167,61 @@ error: it returns `ok` with an empty `fields`, and the overlay says nothing is
 curated yet.
 
 Still to come (blocked on `Kylas.gs`): `bookMeeting`, `addNotes`.
+
+---
+
+## Deal creation from a booking
+
+The extension's contact overlay is a port of `src/index.html`, so it sends
+`bookMeeting` the same payload that page does — plus one extra field:
+
+```js
+{
+  you, primaryEmail, localStart, duration,
+  title, company, callType,        // callType is "Requirement" or "Discovery"
+  reviewers: [...], externals: [...],
+  contactId: "5371930"             // NEW — the Kylas contact being booked
+}
+```
+
+`contactId` is what makes the deal possible without the BD retyping
+anything. The company typed into the form is only for the invite title; the
+deal needs the real Kylas records.
+
+### Resolving company and deal value from the contact
+
+Every contact belongs to a company, so one lookup gets both:
+
+```
+GET /v1/contacts/{contactId}      ->  .company  { id, name }
+GET /v1/companies/{companyId}     ->  whatever field holds deal value
+```
+
+Then create the deal with `POST /v1/deals`, as `Kylas.gs` already does for
+the existing flow — `ownedBy` set to the POC at creation, never patched
+afterwards, because a partial `PUT` reassigns record owners.
+
+### The three variables
+
+Per the current spec the deal carries:
+
+| Variable | Source |
+|---|---|
+| Deal name / type | Starts with **Discovery Call**, varied by `callType` |
+| Company | Resolved from the contact, not the typed field |
+| Deal value | Pulled from the company record |
+
+`callType` is the classification the BD picked in the overlay:
+
+- `"Requirement"` — Active Requirement. Different POC and structure.
+- `"Discovery"` — Discovery Call against an active requirement.
+
+Both come through on the same payload, so one handler can branch on
+`callType` rather than needing two endpoints.
+
+### Still needed
+
+`Kylas.gs` itself. The pipeline/stage ids, `kylasFetch_`, the
+`kylasUpdateContact_` read-modify-write path and the deal-creation shape all
+live there, and the owner-safety rules in `tools/check.js` mean this has to
+match those conventions exactly rather than be written fresh.

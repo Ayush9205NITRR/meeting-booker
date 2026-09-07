@@ -596,3 +596,561 @@ textarea {
   font-size: 11.5px;
   color: var(--ko-ink-3);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Booking flow — ported from POC Router's index.html. Keeps that
+   page's structure (steps, roster, chips, action bar) in the
+   extension's own visual language so it sits beside the company
+   panel rather than looking like a second product.
+   ───────────────────────────────────────────────────────────── */
+
+.ko-when {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ko-tf {
+  background: var(--ko-surface);
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+  padding: 6px 9px;
+  display: block;
+}
+
+.ko-tf:focus-within {
+  border-color: var(--ko-accent);
+}
+
+.ko-tf span {
+  display: block;
+  font-size: 10px;
+  color: var(--ko-ink-3);
+  margin-bottom: 1px;
+}
+
+.ko-tf input,
+.ko-tf select {
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ko-ink);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  min-height: 22px;
+}
+
+.ko-tf input:focus,
+.ko-tf select:focus {
+  outline: 0;
+}
+
+.ko-warn {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  color: #854708;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.ko-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 9px;
+}
+
+.ko-n {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--ko-ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.ko-step h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ko-sub {
+  font-size: 12.5px;
+  color: var(--ko-ink-3);
+  margin-left: auto;
+}
+
+.ko-seg {
+  display: inline-flex;
+  background: var(--ko-surface-2);
+  border-radius: 9px;
+  padding: 3px;
+  margin-bottom: 11px;
+}
+
+.ko-seg button {
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  padding: 7px 13px;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--ko-ink-2);
+  cursor: pointer;
+}
+
+.ko-seg button.on {
+  background: var(--ko-surface);
+  color: var(--ko-ink);
+  font-weight: 650;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.ko-lb {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ko-ink-2);
+  margin-bottom: 5px;
+}
+
+.ko-prev {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ko-line);
+}
+
+.ko-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--ko-ink-2);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ko-link {
+  background: none;
+  border: 0;
+  padding: 4px 0 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ko-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ko-select {
+  width: 100%;
+  background: var(--ko-surface-2);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--ko-ink);
+  min-height: 42px;
+}
+
+.ko-select:focus {
+  outline: 0;
+  background: var(--ko-surface);
+  border-color: var(--ko-accent);
+}
+
+.ko-select.unset {
+  color: var(--ko-ink-3);
+}
+
+.ko-why {
+  font-size: 13px;
+  color: var(--ko-ink-2);
+  margin: 0 0 9px;
+  line-height: 1.45;
+}
+
+.ko-why b {
+  color: var(--ko-ink);
+  font-weight: 650;
+}
+
+.ko-list {
+  background: var(--ko-surface);
+  border: 1px solid var(--ko-line);
+  border-radius: 11px;
+  overflow: hidden;
+}
+
+.ko-p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-top: 1px solid var(--ko-line);
+}
+
+.ko-p:first-child {
+  border-top: 0;
+}
+
+.ko-p:hover {
+  background: var(--ko-surface-2);
+}
+
+.ko-p.sel {
+  background: var(--ko-ink);
+  color: #fff;
+}
+
+.ko-p.sel:hover {
+  background: var(--ko-ink);
+}
+
+.ko-av {
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  background: var(--ko-surface-2);
+  color: var(--ko-ink-2);
+  font-size: 11px;
+  font-weight: 650;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ko-p.sel .ko-av {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.ko-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.ko-n2 {
+  display: block;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.ko-l2 {
+  display: block;
+  font-size: 12px;
+  color: var(--ko-ink-3);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ko-p.sel .ko-l2 {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.ko-rt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.ko-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--ko-surface-2);
+}
+
+.t-FREE { color: #0f6b45; }
+.t-TIGHT { color: #96590a; }
+.t-BUSY { color: #a82a20; }
+.t-NOACCESS { color: #8a8f98; }
+
+.ko-p.sel .ko-tag { background: rgba(255, 255, 255, 0.14); }
+.ko-p.sel .t-FREE { color: #7fe0af; }
+.ko-p.sel .t-TIGHT { color: #f2c67a; }
+.ko-p.sel .t-BUSY { color: #f5a099; }
+.ko-p.sel .t-NOACCESS { color: #b9bec7; }
+
+.ko-poc {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: #fff;
+  color: var(--ko-ink);
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.ko-rank {
+  font-size: 9.5px;
+  color: var(--ko-ink-3);
+}
+
+.ko-p.sel .ko-rank {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ko-cap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.ko-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ko-tg,
+.ko-fixed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 100px;
+  padding: 7px 12px 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ko-tg {
+  background: var(--ko-surface-2);
+  border: 1px solid transparent;
+  color: var(--ko-ink-2);
+}
+
+.ko-tg.on,
+.ko-fixed {
+  background: var(--ko-ink);
+  border: 1px solid var(--ko-ink);
+  color: #fff;
+}
+
+.ko-fixed {
+  cursor: default;
+}
+
+.ko-tk {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ko-ink-3);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: transparent;
+}
+
+.ko-tg.on .ko-tk,
+.ko-fixed .ko-tk {
+  background: #fff;
+  border-color: #fff;
+  color: var(--ko-ink);
+}
+
+.ko-split {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--ko-line);
+}
+
+.ko-hint {
+  font-size: 12px;
+  color: var(--ko-ink-3);
+  margin: 6px 0 8px;
+  line-height: 1.45;
+}
+
+.ko-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ko-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ko-surface-2);
+  border-radius: 8px;
+  padding: 6px 8px 6px 10px;
+  font-size: 12.5px;
+}
+
+.ko-chip.bad {
+  background: #fbeae8;
+  color: #a82a20;
+}
+
+.ko-chip button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ko-ink-3);
+  cursor: pointer;
+}
+
+/* Sticks to the bottom of the rail, like the original's fixed bar. */
+.ko-actbar {
+  position: sticky;
+  bottom: 0;
+  margin: 16px -14px -14px;
+  padding: 10px 14px;
+  /* Opaque, not translucent: content scrolling underneath a sticky bar
+     shows through a 94% white and reads as a rendering fault. */
+  background: var(--ko-surface);
+  border-top: 1px solid var(--ko-line);
+  box-shadow: 0 -6px 16px rgba(16, 20, 36, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ko-flag {
+  flex: 1 0 100%;
+  font-size: 12px;
+  color: #a82a20;
+  line-height: 1.4;
+}
+
+.ko-actwho {
+  flex: 1;
+  min-width: 0;
+}
+
+.ko-act-a {
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ko-act-b {
+  font-size: 11px;
+  color: var(--ko-ink-3);
+}
+
+.ko-go {
+  flex: 0 0 auto;
+  background: var(--ko-ink);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 22px;
+  height: 44px;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.ko-go:disabled {
+  background: var(--ko-line);
+  color: var(--ko-ink-3);
+  cursor: not-allowed;
+}
+
+.ko-done {
+  background: var(--ko-surface);
+  border: 1px solid var(--ko-line);
+  border-radius: 11px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.ko-done-hd {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 9px;
+}
+
+.ko-done-hd i {
+  width: 3px;
+  height: 17px;
+  border-radius: 2px;
+  background: #0f6b45;
+  display: block;
+}
+
+.ko-done-hd h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ko-kv {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  padding: 3px 0;
+}
+
+.ko-kv span:first-child {
+  color: var(--ko-ink-3);
+  flex: 0 0 76px;
+  font-size: 12px;
+}
+
+.ko-kv.flagged span:last-child {
+  color: #a82a20;
+}
+
+.ko-links {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--ko-line);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ko-links a {
+  color: var(--ko-accent);
+  font-size: 13px;
+  text-decoration: none;
+  font-weight: 550;
+}
+
+.ko-skel {
+  height: 52px;
+  border-bottom: 1px solid var(--ko-line);
+  background: linear-gradient(90deg, var(--ko-surface) 0%, var(--ko-surface-2) 50%, var(--ko-surface) 100%);
+  background-size: 200% 100%;
+  animation: ko-shimmer 1.3s linear infinite;
+}
+
+.ko-skel:last-child {
+  border-bottom: 0;
+}
