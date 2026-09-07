@@ -16,9 +16,13 @@
 
 window.KylasOverlayConfig = {
   company: {
+    // `name` and `subtitle` take a list — the first column that actually
+    // has a value wins. Rows created by different routes carry the name in
+    // different columns, so a single hardcoded one is how a record with an
+    // obvious name still renders as "Unknown company".
     header: {
-      name: "Company Name - Kylas",
-      subtitle: "Industry",
+      name: ["Company Name - Kylas", "Company Name", "Name", "Company Name - Kylas copy"],
+      subtitle: ["Industry", "Industry (Kylas)"],
       subtitleType: "text",
     },
 

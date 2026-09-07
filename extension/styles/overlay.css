@@ -22,7 +22,7 @@
 }
 
 .ko-panel {
-  width: 352px;
+  width: 380px;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -30,7 +30,7 @@
   border-left: 1px solid var(--ko-line);
   box-shadow: -8px 0 28px rgba(16, 20, 36, 0.1);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 14.5px;
+  font-size: 15.5px;
   line-height: 1.45;
   color: var(--ko-ink);
   overflow: hidden;
@@ -97,7 +97,7 @@
 }
 
 .ko-title {
-  font-size: 17px;
+  font-size: 18.5px;
   font-weight: 650;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -106,7 +106,7 @@
 }
 
 .ko-subtitle {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ko-ink-3);
   white-space: nowrap;
   overflow: hidden;
@@ -167,7 +167,7 @@
 }
 
 .ko-badge {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 550;
   padding: 3px 9px;
   border-radius: 999px;
@@ -195,7 +195,7 @@
 }
 
 .ko-stat-value {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 650;
   line-height: 1.15;
   color: var(--ko-ink);
@@ -204,7 +204,7 @@
 }
 
 .ko-stat-label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -227,7 +227,7 @@
 }
 
 .ko-row-label {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -236,7 +236,7 @@
 }
 
 .ko-row-value {
-  font-size: 15px;
+  font-size: 16.5px;
   color: var(--ko-ink);
   word-break: break-word;
   padding-right: 26px;
@@ -292,7 +292,7 @@
   border: 1px solid var(--ko-line);
   border-radius: 9px;
   padding: 10px 11px;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.55;
   color: var(--ko-ink-2);
 }
@@ -345,7 +345,7 @@
   color: var(--ko-ink-2);
   border-radius: 8px;
   padding: 7px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 550;
   cursor: pointer;
   font-family: inherit;

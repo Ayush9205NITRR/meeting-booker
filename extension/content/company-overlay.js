@@ -20,6 +20,19 @@
     return { field: entry.field, type: entry.type || "text" };
   }
 
+  // Header columns accept a list of candidates, first non-empty wins.
+  // Company names live in different columns depending on how the row was
+  // created, so one hardcoded name is how you end up with "Unknown
+  // company" on a record that plainly has a name.
+  function firstValue(fields, candidates) {
+    const list = Array.isArray(candidates) ? candidates : [candidates];
+    for (const column of list) {
+      const value = fields[column];
+      if (value != null && String(value).trim()) return String(value).trim();
+    }
+    return "";
+  }
+
   // The server sends the layout already normalised. The local fallback is
   // written for humans, so convert it into the same shape and let one
   // renderer handle both.
@@ -153,8 +166,8 @@
 
     const layout = pickLayout(response);
     const headerConfig = layout.header || {};
-    const name = fields[headerConfig.name] || "Unknown company";
-    const subtitleValue = fields[headerConfig.subtitle];
+    const name = firstValue(fields, headerConfig.name) || "Unknown company";
+    const subtitleValue = firstValue(fields, headerConfig.subtitle);
     panel.setHeader({
       name,
       subtitleHtml: subtitleValue
