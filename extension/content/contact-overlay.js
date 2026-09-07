@@ -715,7 +715,9 @@
     side: "right",
   });
 
+  panel.setVisible(false);
   KylasOverlay.watchRecordId(CONTACT_PATH, (contactId) => {
+    panel.setVisible(true);
     state.contactId = contactId;
     state.booked = null;
     state.error = null;
@@ -728,5 +730,10 @@
     });
     load();
     loadDealSetup();
+  }, () => {
+    // Left the contact — stop the 45s board refresh so a hidden panel
+    // isn't polling calendars in the background.
+    clearTimeout(refreshTimer);
+    panel.setVisible(false);
   });
 })();

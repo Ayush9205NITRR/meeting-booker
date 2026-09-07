@@ -239,5 +239,13 @@
     side: "right",
   });
 
-  KylasOverlay.watchRecordId(COMPANY_PATH, (companyId) => loadCompany(companyId, panel));
+  panel.setVisible(false);
+  KylasOverlay.watchRecordId(
+    COMPANY_PATH,
+    (companyId) => {
+      panel.setVisible(true);
+      loadCompany(companyId, panel);
+    },
+    () => panel.setVisible(false)
+  );
 })();

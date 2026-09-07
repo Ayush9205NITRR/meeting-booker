@@ -11,16 +11,22 @@ KylasOverlay.extractId = function extractId(pattern) {
   return match ? match[1] : null;
 };
 
-KylasOverlay.watchRecordId = function watchRecordId(pattern, onChange) {
-  let lastId = KylasOverlay.extractId(pattern);
-  if (lastId) onChange(lastId);
-  setInterval(() => {
-    const currentId = KylasOverlay.extractId(pattern);
-    if (currentId && currentId !== lastId) {
-      lastId = currentId;
-      onChange(currentId);
-    }
-  }, 800);
+// Kylas is a single-page app: clicking from the contacts list into a
+// contact changes the URL without a page load, so Chrome never injects a
+// content script matched to the detail path. The scripts therefore match
+// all of app.kylas.io and decide for themselves when to appear — this
+// watcher reports both entering a record and leaving one.
+KylasOverlay.watchRecordId = function watchRecordId(pattern, onEnter, onLeave) {
+  let lastId;
+  const tick = () => {
+    const id = KylasOverlay.extractId(pattern);
+    if (id === lastId) return;
+    lastId = id;
+    if (id) onEnter(id);
+    else if (onLeave) onLeave();
+  };
+  tick();
+  setInterval(tick, 500);
 };
 
 KylasOverlay.request = function request(action, payload) {
@@ -144,6 +150,11 @@ KylasOverlay.createPanel = function createPanel({ id, title, side = "right" }) {
     host,
     shadow,
     body,
+    // Both content scripts now load on every Kylas page, so each panel
+    // hides itself when the URL isn't its own record type.
+    setVisible(visible) {
+      host.style.display = visible ? "" : "none";
+    },
     setHeader,
     setBody(html) {
       body.innerHTML = html;
