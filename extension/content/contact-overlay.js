@@ -50,7 +50,14 @@
     dealName: "",
     dealNameEdited: false,
     dealValue: "",
-    assoc: null,          // { contact:{id,name}, company:{id,name} } from Kylas
+    dealValueEdited: false,
+    assoc: null,          // { contact, owner, company } from Kylas
+    setupError: "",       // why the deal setup couldn't load, shown plainly
+
+    // Client side comes from the company's own contact records, so emails
+    // are the ones Kylas holds rather than typed from memory.
+    companyContacts: null,
+    pickedContacts: {},   // email -> true
   };
 
   let refreshTimer = null;
@@ -90,35 +97,54 @@
 
   const localStart = () => `${state.date}T${state.time}`;
 
-  // Mirrors bookMeeting's attendee logic so the count shown matches what
-  // actually lands on the invite.
-  function guestEmails() {
+  // Everyone who ends up on the invite, grouped and labelled. This is the
+  // single source of truth for both the count and the roll-up, so what a
+  // BD is shown is exactly who gets invited — nobody is silently dropped.
+  function attendees() {
     const seen = {};
     const out = [];
-    const add = (e) => {
-      const v = String(e || "").trim().toLowerCase();
-      if (v && !seen[v]) {
-        seen[v] = 1;
-        out.push(v);
-      }
+    const add = (email, name, role) => {
+      const v = String(email || "").trim().toLowerCase();
+      if (!v || seen[v]) return;
+      seen[v] = 1;
+      out.push({ email: v, name: name || v.split("@")[0], role });
     };
-    if (state.primary) add(state.primary);
-    add(state.you);
-    if (state.board && state.board.blockAll) {
-      state.board.players.forEach((p) => add(p.email));
+
+    const b = state.board;
+    const poc = b && b.players.find((p) => p.email === state.primary);
+    if (poc) add(poc.email, poc.name, "POC — leads the call");
+    add(state.you, state.you && state.you.split("@")[0], "You — booking it");
+
+    // The contact's owner in Kylas. Missed before, which is why invites
+    // were going out without the person who owns the relationship.
+    const owner = state.assoc && state.assoc.owner;
+    if (owner && owner.email) add(owner.email, owner.name, "Contact owner");
+
+    // Every other player, so the slot is held on all their calendars.
+    if (b && b.blockAll) {
+      b.players.forEach((p) => add(p.email, p.name, "POC — slot held"));
     }
-    if (state.board) {
-      state.board.reviewers.forEach((r) => {
-        if (state.revSel[r.email]) add(r.email);
+    if (b) {
+      b.reviewers.forEach((r) => {
+        if (state.revSel[r.email]) add(r.email, r.name, "Reviewer");
       });
     }
-    state.externals.forEach(add);
+
+    (state.companyContacts || []).forEach((c) => {
+      if (state.pickedContacts[c.email]) {
+        add(c.email, c.name, "Client" + (c.designation ? " — " + c.designation : ""));
+      }
+    });
+    state.externals.forEach((e) => add(e, null, "Client — added manually"));
+
     return out;
   }
 
+  const guestEmails = () => attendees().map((a) => a.email);
+
   function buildTitle() {
     if (state.titleEdited) return;
-    const c = state.company.trim() || "[Company]";
+    const c = companyName() || "[Company]";
     const x = state.extra.trim();
     const q = (state.board && state.board.quarter) || "";
     state.title =
@@ -127,11 +153,20 @@
         : `${c} <> Enout | ${x || "[Last event]"}`;
   }
 
+  // One company name, resolved from the contact, used by the invite title
+  // and the deal alike. There is no separate per-type company field —
+  // "Globemoving" on a Demand Funnel deal and on its invite are the same
+  // string because they come from the same place.
+  function companyName() {
+    return (
+      (state.assoc && state.assoc.company && state.assoc.company.name) ||
+      state.company.trim()
+    );
+  }
+
   function buildDealName() {
     if (state.dealNameEdited) return;
-    const co =
-      (state.assoc && state.assoc.company && state.assoc.company.name) ||
-      state.company.trim();
+    const co = companyName();
     state.dealName = co ? `${co} — ${typeOf(state.callType).deal}` : typeOf(state.callType).deal;
   }
 
@@ -189,7 +224,9 @@
             `<button data-type="${t.id}" class="${t.id === state.callType ? "on" : ""}">${esc(t.label)}</button>`
         ).join("")}
       </div>
-      <label class="ko-lb">Company</label>
+      <label class="ko-lb">Company${
+        state.assoc && state.assoc.company ? " <span class='ko-from'>from the contact</span>" : ""
+      }</label>
       <input type="text" id="ko-company" placeholder="Acme Pvt Ltd" value="${esc(state.company)}">
       <label class="ko-lb">${isReq ? "Event type" : "Last event"}</label>
       <input type="text" id="ko-extra" placeholder="${isReq ? "Offsite" : "Annual Offsite 2025"}"
@@ -211,7 +248,17 @@
       </select>
 
       <div class="ko-step"><span class="ko-n">3</span><h2>Tentative POC</h2>
-        <span class="ko-sub">${b ? `${b.freeCount} of ${b.players.length} free` : ""}</span></div>
+        <span class="ko-sub">${
+          b
+            ? `${
+                // freeCount can be absent depending on the backend's shape;
+                // count it rather than printing "undefined of N free".
+                typeof b.freeCount === "number"
+                  ? b.freeCount
+                  : b.players.filter((p) => p.free).length
+              } of ${b.players.length} free`
+            : ""
+        }</span></div>
       ${whyHtml()}
       <div class="ko-list" id="ko-roster">${rosterHtml()}</div>
 
@@ -296,7 +343,7 @@
 
     return `
       <div class="ko-step"><span class="ko-n">4</span><h2>Who else joins</h2>
-        <span class="ko-sub">${total ? total + " on the invite" : ""}</span></div>
+        <span class="ko-sub" id="ko-guest-count">${total ? total + " on the invite" : ""}</span></div>
       <div class="ko-cap"><span>From Enout</span>
         <button class="ko-link" id="ko-rev-all">${everyOn() ? "Clear all" : "Add all"}</button></div>
       <div class="ko-tags">
@@ -318,7 +365,8 @@
       }
       <div class="ko-split">
         <div class="ko-cap"><span>Client side</span></div>
-        <p class="ko-hint">Type an email, press Enter.</p>
+        ${clientContactsHtml()}
+        <p class="ko-hint">Anyone not in Kylas — type an email, press Enter.</p>
         <div class="ko-chips" id="ko-chips">
           ${state.externals
             .map(
@@ -329,6 +377,82 @@
             .join("")}
         </div>
         <input type="text" id="ko-ext" placeholder="name@company.com" autocomplete="off">
+      </div>
+
+      ${inviteRollupHtml()}`;
+  }
+
+  // Client participants come from the company's own contact records, so
+  // the email is the one Kylas holds rather than one typed from memory.
+  function clientContactsHtml() {
+    if (state.companyContacts === null) {
+      return `<p class="ko-hint">Loading contacts at this company…</p>`;
+    }
+    if (!state.companyContacts.length) {
+      return `<p class="ko-hint">No other contacts on this company in Kylas.</p>`;
+    }
+    return `
+      <div class="ko-people">
+        ${state.companyContacts
+          .map(
+            (c) => `
+          <label class="ko-person${state.pickedContacts[c.email] ? " on" : ""}">
+            <input type="checkbox" data-email="${esc(c.email)}"
+                   ${state.pickedContacts[c.email] ? "checked" : ""}>
+            <span class="ko-person-t">
+              <span class="ko-person-n">${esc(c.name)}${
+                c.designation ? ` <span class="ko-muted">${esc(c.designation)}</span>` : ""
+              }</span>
+              <span class="ko-person-e">${esc(c.email)}</span>
+            </span>
+          </label>`
+          )
+          .join("")}
+      </div>`;
+  }
+
+  // The whole point: before blocking, show every stakeholder who will be
+  // on the invite, with their email and why they're there. Nobody gets
+  // added invisibly.
+  function rollupRowsHtml(list) {
+    return list
+      .map(
+        (a) => `
+      <div class="ko-invitee">
+        <span class="ko-invitee-n">${esc(a.name)}</span>
+        <span class="ko-invitee-e">${esc(a.email)}</span>
+        <span class="ko-invitee-r">${esc(a.role)}</span>
+      </div>`
+      )
+      .join("");
+  }
+
+  // Ticking an attendee must not re-render the panel: that destroys the
+  // checkbox under the cursor mid-click and throws away scroll position in
+  // a panel this long. Update only what actually changed.
+  function refreshAttendees() {
+    const list = attendees();
+    const rollup = panel.body.querySelector("#ko-rollup");
+    if (rollup) rollup.innerHTML = rollupRowsHtml(list);
+
+    const count = panel.body.querySelector("#ko-rollup-count");
+    if (count) count.textContent = String(list.length);
+
+    const guestCount = panel.body.querySelector("#ko-guest-count");
+    if (guestCount) guestCount.textContent = list.length ? `${list.length} on the invite` : "";
+
+    const actA = panel.body.querySelector(".ko-act-a");
+    if (actA) actA.innerHTML = actionLine();
+  }
+
+  function inviteRollupHtml() {
+    const list = attendees();
+    if (!list.length) return "";
+    return `
+      <div class="ko-split">
+        <div class="ko-cap"><span>On the invite</span>
+          <span class="ko-muted" id="ko-rollup-count">${list.length}</span></div>
+        <div class="ko-rollup" id="ko-rollup">${rollupRowsHtml(list)}</div>
       </div>`;
   }
 
@@ -343,6 +467,11 @@
     return `
       <div class="ko-step"><span class="ko-n">5</span><h2>Deal</h2>
         <span class="ko-sub">created on booking</span></div>
+      ${
+        state.setupError
+          ? `<div class="ko-warn">${esc(state.setupError)}</div>`
+          : ""
+      }
 
       <label class="ko-lb">Deal name</label>
       <input type="text" id="ko-deal-name" value="${esc(state.dealName)}">
@@ -352,7 +481,7 @@
           <label class="ko-lb">Pipeline</label>
           <select id="ko-pipeline" class="ko-select">
             ${
-              state.pipelines
+              state.pipelines && state.pipelines.length
                 ? state.pipelines
                     .map(
                       (p) =>
@@ -361,7 +490,7 @@
                         }>${esc(p.name)}</option>`
                     )
                     .join("")
-                : `<option>Loading…</option>`
+                : `<option>${state.pipelines ? "None found" : "Loading…"}</option>`
             }
           </select>
         </div>
@@ -478,7 +607,10 @@
       state.dealName = e.target.value;
       state.dealNameEdited = true;
     });
-    $("#ko-deal-value").addEventListener("input", (e) => { state.dealValue = e.target.value; });
+    $("#ko-deal-value").addEventListener("input", (e) => {
+      state.dealValue = e.target.value;
+      state.dealValueEdited = true;
+    });
     $("#ko-pipeline").addEventListener("change", (e) => {
       state.pipelineId = e.target.value;
       const p = currentPipeline();
@@ -498,7 +630,12 @@
       if (view) view.textContent = state.title;
       if (input && !state.titleEdited) input.value = state.title;
     };
-    $("#ko-company").addEventListener("input", (e) => { state.company = e.target.value; refreshTitle(); });
+    $("#ko-company").addEventListener("input", (e) => {
+      state.company = e.target.value;
+      if (state.assoc && state.assoc.company) state.assoc.company.name = e.target.value;
+      refreshTitle();
+      buildDealName();
+    });
     $("#ko-extra").addEventListener("input", (e) => { state.extra = e.target.value; refreshTitle(); });
     $("#ko-title").addEventListener("input", (e) => { state.title = e.target.value; });
 
@@ -533,7 +670,10 @@
       btn.addEventListener("click", () => {
         const e = btn.getAttribute("data-e");
         state.revSel[e] = !state.revSel[e];
-        render();
+        btn.classList.toggle("on", state.revSel[e]);
+        const all = panel.body.querySelector("#ko-rev-all");
+        if (all) all.textContent = everyOn() ? "Clear all" : "Add all";
+        refreshAttendees();
       });
     });
 
@@ -556,6 +696,16 @@
       });
       ext.addEventListener("blur", () => { if (ext.value.trim()) commit(); });
     }
+    panel.body.querySelectorAll(".ko-person input").forEach((box) => {
+      box.addEventListener("change", () => {
+        const email = box.getAttribute("data-email");
+        if (box.checked) state.pickedContacts[email] = true;
+        else delete state.pickedContacts[email];
+        box.closest(".ko-person").classList.toggle("on", box.checked);
+        refreshAttendees();
+      });
+    });
+
     panel.body.querySelectorAll("#ko-chips button").forEach((btn) => {
       btn.addEventListener("click", () => {
         state.externals.splice(Number(btn.getAttribute("data-i")), 1);
@@ -625,16 +775,17 @@
   // to break booking, so a failure just leaves the dropdown or the company
   // line empty rather than surfacing an error over the whole panel.
   async function loadDealSetup() {
+    const problems = [];
+
     if (!state.pipelines) {
       try {
         const res = await KylasOverlay.request("getDealPipelines", {});
-        if (res && res.ok && res.pipelines && res.pipelines.length) {
-          state.pipelines = res.pipelines;
-          applyPipelineDefault();
-          render();
-        }
+        state.pipelines = (res && res.pipelines) || [];
+        if (state.pipelines.length) applyPipelineDefault();
+        else problems.push("No deal pipelines returned");
       } catch (e) {
-        /* dropdown stays on "Loading…"; booking still works */
+        state.pipelines = [];
+        problems.push("Pipelines failed to load");
       }
     }
 
@@ -642,12 +793,41 @@
       const res = await KylasOverlay.request("getContact", { contactId: state.contactId });
       if (res && res.ok) {
         state.assoc = res;
+        // Company name flows into both the invite title and the deal.
+        if (res.company && res.company.name && !state.company.trim()) {
+          state.company = res.company.name;
+        }
+        if (res.company && res.company.dealValue && !state.dealValueEdited) {
+          state.dealValue = String(res.company.dealValue);
+        }
+        buildTitle();
         buildDealName();
-        render();
+        if (res.company && res.company.id) loadCompanyContacts(res.company.id);
+        else state.companyContacts = [];
+      } else {
+        problems.push((res && res.error) || "Contact lookup failed");
+        state.companyContacts = [];
       }
     } catch (e) {
-      /* company line stays unresolved */
+      problems.push("Contact lookup failed");
+      state.companyContacts = [];
     }
+
+    // Say why rather than leaving a dropdown spinning forever.
+    state.setupError = problems.length
+      ? problems.join(". ") + ". Set the POC Router URL in the extension popup."
+      : "";
+    render();
+  }
+
+  async function loadCompanyContacts(companyId) {
+    try {
+      const res = await KylasOverlay.request("getCompanyContacts", { companyId });
+      state.companyContacts = (res && res.contacts) || [];
+    } catch (e) {
+      state.companyContacts = [];
+    }
+    render();
   }
 
   async function book() {
@@ -683,6 +863,10 @@
           .map((r) => r.email),
         externals: state.externals,
         contactId: state.contactId,
+        // Everyone shown in the roll-up, with the role each was listed
+        // under, so the invite matches the panel exactly.
+        attendees: attendees(),
+        ownerEmail: state.assoc && state.assoc.owner ? state.assoc.owner.email : null,
         // Six fields, exactly. Company and contact go as ids resolved from
         // the record, so the deal lands on the right account without the BD
         // retyping anything the CRM already knows.
@@ -723,6 +907,12 @@
     state.error = null;
     state.assoc = null;
     state.dealNameEdited = false;
+    state.dealValueEdited = false;
+    state.dealValue = "";
+    state.company = "";
+    state.companyContacts = null;
+    state.pickedContacts = {};
+    state.setupError = "";
     panel.setHeader({
       name: "Book Meeting",
       avatar: "📅",

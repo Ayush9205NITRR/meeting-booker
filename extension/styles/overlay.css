@@ -1191,3 +1191,79 @@ textarea {
 .ko-assoc .ko-kv {
   padding: 2px 0;
 }
+
+/* Client-side participants, picked from Kylas contact records. */
+.ko-people {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.ko-person {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.ko-person:hover { border-color: #c9cbf5; background: #fafaff; }
+.ko-person.on { border-color: var(--ko-accent); background: var(--ko-accent-soft); }
+
+.ko-person-t { display: flex; flex-direction: column; min-width: 0; }
+.ko-person-n { font-size: 13.5px; font-weight: 600; }
+.ko-person-e {
+  font-size: 12px;
+  color: var(--ko-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The roll-up: every stakeholder, with their email and why. */
+.ko-rollup {
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.ko-invitee {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--ko-line);
+  background: var(--ko-surface-2);
+}
+
+.ko-invitee:first-child { border-top: 0; }
+.ko-invitee-n { font-size: 13.5px; font-weight: 600; }
+.ko-invitee-r {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ko-accent-text);
+  background: var(--ko-accent-soft);
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ko-invitee-e {
+  font-size: 12px;
+  color: var(--ko-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ko-from {
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--ko-ink-3);
+  text-transform: none;
+  letter-spacing: 0;
+}

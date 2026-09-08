@@ -144,10 +144,17 @@ function mockBoard(localStart) {
     ok: true,
     demo: true,
     notice: BOOKING_MOCK_NOTICE,
-    slot: { startIso: localStart, duration: 30 },
+    slot: { startIso: localStart, duration: 30, isPast: false, outsideHours: false },
+    // These four were missing, which is why the panel read "undefined of
+    // 2 free" and offered no booker emails in demo mode.
+    bookers: ["ayush@enout.in", "arshdeep@enout.in", "muskan@enout.in"],
+    blockAll: true,
+    assignment: "order",
+    freeCount: 2,
+    quarter: "",
     players: [
-      { name: "Hritik", email: "hrithik@enout.in", status: "FREE", line: "Nothing else booked", rank: 1 },
-      { name: "Aarushi", email: "aarushi@enout.in", status: "FREE", line: "1 other meeting today", rank: 3 },
+      { name: "Hritik", email: "hrithik@enout.in", initials: "HR", status: "FREE", line: "Nothing else booked", rank: 1, free: true },
+      { name: "Aarushi", email: "aarushi@enout.in", initials: "AA", status: "FREE", line: "1 other meeting today", rank: 3, free: true },
     ],
     reviewers: [
       { name: "Ayush", email: "ayush@enout.in", default: true },
@@ -201,6 +208,13 @@ async function handleRequest(action, payload) {
         contactId: payload.contactId,
       });
       return result || { ok: false, error: "No backend configured." };
+    }
+    case "getCompanyContacts": {
+      const result = await callBackend({
+        action: "companyContacts",
+        companyId: payload.companyId,
+      });
+      return result || { ok: true, contacts: [] };
     }
     case "bookMeeting": {
       const result = await postBackend({ action: "bookMeeting", ...payload });

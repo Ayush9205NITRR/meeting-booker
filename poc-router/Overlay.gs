@@ -52,6 +52,10 @@ const OVERLAY_CONFIG_TABLE = 'Overlay Config';
 // config table isn't hit on every single page view.
 const OVERLAY_CONFIG_TTL = 60;
 
+// Where the company's deal value lives. Run overlaySelfTest() to see the
+// company record's fields and set this to the right one.
+const OVERLAY_COMPANY_VALUE_FIELD = 'cfDealValue';
+
 // A company id known to exist, used only by overlaySelfTest().
 const OVERLAY_SELFTEST_COMPANY_ID = '1778327';
 
@@ -73,6 +77,8 @@ function overlayApi_(e) {
         return overlayJson_({ ok: true, pipelines: overlayDealPipelines_() });
       case 'contact':
         return overlayJson_(overlayContact_(params.contactId));
+      case 'companyContacts':
+        return overlayJson_(overlayCompanyContacts_(params.companyId));
       case 'ping':
         return overlayJson_({ ok: true, pong: true });
       default:
@@ -371,26 +377,134 @@ function overlayDealPipelines_() {
 }
 
 /**
- * The contact, and the company it belongs to. This is what lets a deal be
- * created without the BD retyping anything: the overlay only knows a
- * contact id from the page URL.
+ * The contact, its owner, and the company it belongs to.
+ *
+ * This is what lets a deal be created and an invite addressed without the
+ * BD retyping anything: the overlay only knows a contact id from the page
+ * URL. The owner goes on the calendar invite; the company drives both the
+ * invite title and the deal, so the same name is used everywhere.
  */
 function overlayContact_(contactId) {
   const id = String(contactId == null ? '' : contactId).trim();
   if (!id) throw new Error('contactId is required.');
 
   const c = overlayKylasGet_('/v1/contacts/' + encodeURIComponent(id));
-  const company = c.company || (c.companies && c.companies[0]) || null;
+  const companyRef = c.company || (c.companies && c.companies[0]) || null;
+
+  let company = null;
+  if (companyRef && companyRef.id) {
+    company = { id: companyRef.id, name: companyRef.name || '', dealValue: '' };
+    // The full record carries the value field; a miss is not fatal, the BD
+    // can still type one.
+    try {
+      const full = overlayKylasGet_('/v1/companies/' + encodeURIComponent(companyRef.id));
+      company.name = full.name || company.name;
+      company.dealValue = overlayPickValue_(full);
+    } catch (e) {
+      /* keep the reference-only company */
+    }
+  }
 
   return {
     ok: true,
     contact: {
       id: c.id || id,
-      name: [c.firstName, c.lastName].filter(String).join(' ').trim() || c.name || ''
+      name: [c.firstName, c.lastName].filter(String).join(' ').trim() || c.name || '',
+      email: overlayPrimaryEmail_(c)
     },
+    owner: overlayOwner_(c.ownedBy),
     company: company
-      ? { id: company.id, name: company.name || '' }
-      : null
+  };
+}
+
+/** Kylas returns emails as a list of {type,value,primary}. */
+function overlayPrimaryEmail_(record) {
+  const emails = record.emails || [];
+  const primary = emails.filter(function (e) { return e.primary; })[0] || emails[0];
+  return (primary && primary.value) || record.email || '';
+}
+
+/**
+ * The record owner, for the calendar invite. Kylas often omits the email
+ * on the embedded ownedBy, so fall back to the user record — the same
+ * two-step kylas-airtable-sync does when building its owner-email map.
+ */
+function overlayOwner_(ownedBy) {
+  if (!ownedBy || !ownedBy.id) return null;
+  const owner = { id: ownedBy.id, name: ownedBy.name || '', email: ownedBy.email || '' };
+  if (!owner.email) {
+    try {
+      const user = overlayKylasGet_('/v1/users/' + encodeURIComponent(ownedBy.id));
+      owner.email = user.email || '';
+      owner.name = owner.name || [user.firstName, user.lastName].filter(String).join(' ').trim();
+    } catch (e) {
+      /* no email available; the overlay shows the name without one */
+    }
+  }
+  return owner;
+}
+
+/**
+ * Deal value off the company record. Tenants keep this in different
+ * places, so try the configured field first, then the usual suspects, and
+ * return '' rather than guessing wrong.
+ */
+function overlayPickValue_(company) {
+  const cf = company.customFieldValues || {};
+  const candidates = [
+    cf[OVERLAY_COMPANY_VALUE_FIELD],
+    company[OVERLAY_COMPANY_VALUE_FIELD],
+    cf.cfDealValue, cf.cfDealSize, cf.cfRevenue,
+    company.annualRevenue, company.revenue
+  ];
+  for (var i = 0; i < candidates.length; i++) {
+    var v = candidates[i];
+    if (v === 0) return '0';
+    if (v) return typeof v === 'object' ? String(v.value || v.name || '') : String(v);
+  }
+  return '';
+}
+
+/**
+ * Every contact at the company, so client-side participants are picked
+ * from real records with real email addresses instead of being typed from
+ * memory.
+ */
+function overlayCompanyContacts_(companyId) {
+  const id = String(companyId == null ? '' : companyId).trim();
+  if (!id) throw new Error('companyId is required.');
+
+  const res = UrlFetchApp.fetch('https://api.kylas.io/v1/search/contact?page=0&size=100&sort=updatedAt,desc', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'api-key': overlayKylasKey_() },
+    payload: JSON.stringify({
+      fields: ['id', 'firstName', 'lastName', 'emails', 'company', 'department', 'designation'],
+      jsonRule: {
+        rules: [{ id: 'company.id', field: 'company.id', type: 'string', operator: 'equal', value: id }],
+        condition: 'AND', valid: true
+      }
+    }),
+    muteHttpExceptions: true
+  });
+
+  if (res.getResponseCode() !== 200) {
+    throw new Error('Kylas contact search returned ' + res.getResponseCode());
+  }
+
+  const body = JSON.parse(res.getContentText());
+  const list = body.content || body.data || [];
+
+  return {
+    ok: true,
+    contacts: list.map(function (c) {
+      return {
+        id: c.id,
+        name: [c.firstName, c.lastName].filter(String).join(' ').trim(),
+        email: overlayPrimaryEmail_(c),
+        designation: c.designation || ''
+      };
+    }).filter(function (c) { return c.email; })
   };
 }
 
