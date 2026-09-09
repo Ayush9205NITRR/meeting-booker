@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Kylas Overlay — Sales Intelligence",
+  "name": "Kylas Overlay \u2014 Sales Intelligence",
   "version": "0.1.0",
   "description": "Surfaces curated Airtable company data and one-click meeting booking directly inside Kylas.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "storage": {
     "managed_schema": "managed_schema.json"
   },
@@ -17,20 +19,28 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://app.kylas.io/*"],
+      "matches": [
+        "https://app.kylas.io/*"
+      ],
       "js": [
         "config/field-map.js",
+        "config/queue.js",
         "content/shared.js",
         "content/company-overlay.js",
-        "content/contact-overlay.js"
+        "content/contact-overlay.js",
+        "content/home-overlay.js"
       ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["styles/overlay.css"],
-      "matches": ["https://app.kylas.io/*"]
+      "resources": [
+        "styles/overlay.css"
+      ],
+      "matches": [
+        "https://app.kylas.io/*"
+      ]
     }
   ],
   "action": {

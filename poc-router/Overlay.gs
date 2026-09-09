@@ -79,6 +79,8 @@ function overlayApi_(e) {
         return overlayJson_(overlayContact_(params.contactId));
       case 'companyContacts':
         return overlayJson_(overlayCompanyContacts_(params.companyId));
+      case 'myContacts':
+        return overlayJson_(overlayMyContacts_(params.ownerEmail));
       case 'ping':
         return overlayJson_({ ok: true, pong: true });
       default:
@@ -506,6 +508,134 @@ function overlayCompanyContacts_(companyId) {
       };
     }).filter(function (c) { return c.email; })
   };
+}
+
+// ============ THE BDR'S OWN CONTACTS ============
+//
+// Returns the signed-in BD's contacts with the three things the work
+// queue needs to bucket them: stage, next call date, last called at.
+// The bucketing itself is done in the extension so the definitions live
+// in one editable file rather than being split across two codebases.
+//
+// Identifying the BD matters here: the Kylas API key is a single tenant
+// key, so /v1/users/me would return the key's owner, not whoever is
+// looking. The deployment runs executeAs USER_ACCESSING, so the Google
+// account is the BD's — match that email to a Kylas user.
+
+function overlayMyContacts_(ownerEmail) {
+  const email = String(ownerEmail || '').trim() || overlayViewerEmail_();
+  if (!email) {
+    throw new Error('Could not tell who is signed in. Set your email in the extension popup.');
+  }
+
+  const user = overlayFindUserByEmail_(email);
+  if (!user) throw new Error('No Kylas user found for ' + email + '.');
+
+  return {
+    ok: true,
+    owner: { id: user.id, name: user.name, email: email },
+    contacts: overlayContactsOwnedBy_(user.id)
+  };
+}
+
+function overlayViewerEmail_() {
+  try {
+    return Session.getActiveUser().getEmail() || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function overlayFindUserByEmail_(email) {
+  const target = String(email).trim().toLowerCase();
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('overlayUsers');
+
+  let users;
+  if (cached) {
+    users = JSON.parse(cached);
+  } else {
+    const raw = overlayKylasGet_('/v1/users?page=0&size=200');
+    const list = raw.content || raw.data || (Array.isArray(raw) ? raw : []);
+    users = list.map(function (u) {
+      return {
+        id: u.id,
+        email: String(u.email || '').toLowerCase(),
+        name: [u.firstName, u.lastName].filter(String).join(' ').trim() || u.name || ''
+      };
+    });
+    cache.put('overlayUsers', JSON.stringify(users), 900);
+  }
+
+  return users.filter(function (u) { return u.email === target; })[0] || null;
+}
+
+/**
+ * Every contact this user owns. Paged, because a BD can own hundreds and
+ * a queue that silently stops at the first 100 would quietly under-report
+ * exactly the work it exists to surface.
+ */
+function overlayContactsOwnedBy_(userId) {
+  const out = [];
+  let page = 0;
+
+  while (page < 20) {                       // 2000 contacts is plenty
+    const res = UrlFetchApp.fetch(
+      'https://api.kylas.io/v1/search/contact?page=' + page + '&size=100&sort=updatedAt,desc', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { 'api-key': overlayKylasKey_() },
+        payload: JSON.stringify({
+          fields: ['id', 'firstName', 'lastName', 'company', 'ownerId',
+                   'pipelineStage', 'customFieldValues', 'updatedAt'],
+          jsonRule: {
+            rules: [{ id: 'ownerId', field: 'ownerId', type: 'string',
+                      operator: 'equal', value: String(userId) }],
+            condition: 'AND', valid: true
+          }
+        }),
+        muteHttpExceptions: true
+      });
+
+    if (res.getResponseCode() !== 200) {
+      throw new Error('Kylas contact search returned ' + res.getResponseCode());
+    }
+
+    const body = JSON.parse(res.getContentText());
+    const list = body.content || body.data || [];
+    list.forEach(function (c) { out.push(overlayQueueContact_(c)); });
+
+    if (list.length < 100 || body.last === true) break;
+    page++;
+  }
+
+  return out;
+}
+
+/** Flattens one contact to what the queue needs, tolerating field drift. */
+function overlayQueueContact_(c) {
+  const cf = c.customFieldValues || {};
+  const stage = c.pipelineStage || cf.cfPipelineStageBd || c.stage || '';
+  return {
+    id: c.id,
+    name: [c.firstName, c.lastName].filter(String).join(' ').trim() || c.name || ('#' + c.id),
+    company: (c.company && c.company.name) || '',
+    stage: typeof stage === 'object' ? (stage.name || '') : String(stage || ''),
+    nextCallDate: overlayDateOnly_(cf.cfNextCallDate || c.nextCallDate || ''),
+    lastCalledAt: overlayDateOnly_(cf.cfLastCalledAt || c.lastCalledAt || '')
+  };
+}
+
+/** yyyy-MM-dd in the tenant's timezone, so "today" means the BD's today. */
+function overlayDateOnly_(value) {
+  if (!value) return '';
+  try {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    return Utilities.formatDate(d, Session.getScriptTimeZone() || 'Asia/Kolkata', 'yyyy-MM-dd');
+  } catch (e) {
+    return '';
+  }
 }
 
 // ============ SELF TEST — run from the editor ============

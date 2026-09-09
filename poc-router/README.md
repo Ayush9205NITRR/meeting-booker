@@ -225,3 +225,32 @@ Both come through on the same payload, so one handler can branch on
 `kylasUpdateContact_` read-modify-write path and the deal-creation shape all
 live there, and the owner-safety rules in `tools/check.js` mean this has to
 match those conventions exactly rather than be written fresh.
+
+---
+
+## The BDR work queue (`/sales/home`)
+
+`?action=myContacts` returns the signed-in BD's own contacts with the
+three fields the queue buckets on: `stage`, `nextCallDate`, `lastCalledAt`.
+
+**Whose contacts?** The Kylas API key is a single tenant key, so
+`/v1/users/me` would return the key's owner rather than whoever is looking.
+The deployment runs `executeAs: USER_ACCESSING`, so the Google account *is*
+the BD's — the endpoint matches that email to a Kylas user and filters by
+owner. The extension also passes the email saved in its popup, which wins
+if present.
+
+Bucketing happens in the extension (`extension/config/queue.js`) so the
+definitions live in one editable file rather than being split across two
+codebases. Two buckets aren't stages at all:
+
+| Bucket | Definition |
+|---|---|
+| Fresh | Never called — `lastCalledAt` empty. This matches kylas-airtable-sync's own definition ("no contact has ever been called"), *not* a stage named "Fresh". |
+| Connect today | `nextCallDate` is today, in the script's timezone |
+
+Stage names are matched after normalising case, whitespace and dash
+characters, so `CNC (Could Not Connect) – 1` still lands in **To exhaust**
+alongside `... - 1`. A cosmetic rename in Kylas won't silently empty a
+bucket — and **Show stages found** in the panel lists every distinct stage
+coming back, flagging any that no bucket claims.

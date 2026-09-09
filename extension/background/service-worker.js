@@ -216,6 +216,21 @@ async function handleRequest(action, payload) {
       });
       return result || { ok: true, contacts: [] };
     }
+    // The BD's own contacts for the home-page queue. No mock: a fake
+    // queue would have a BD working a list that doesn't exist.
+    case "getMyContacts": {
+      const result = await callBackend({
+        action: "myContacts",
+        ownerEmail: payload.ownerEmail || "",
+      });
+      return (
+        result || {
+          ok: false,
+          error:
+            "No booking backend configured yet — set the POC Router URL in the extension popup.",
+        }
+      );
+    }
     case "bookMeeting": {
       const result = await postBackend({ action: "bookMeeting", ...payload });
       if (result) return result;
