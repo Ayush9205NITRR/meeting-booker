@@ -93,7 +93,13 @@
       .err {
         color: #b42318;
       }
-    </style>
+      button.secondary {
+    background: #fff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    margin-top: 6px;
+  }
+</style>
   </head>
   <body>
     <h1>Kylas Overlay</h1>
@@ -130,6 +136,7 @@
     </p>
 
     <button id="save">Save</button>
+    <button id="test" class="secondary">Test POC Router</button>
     <div id="status"></div>
     <!-- Which build is actually loaded. Reloading an extension re-reads
          the folder it was loaded FROM, so a copy unpacked from an old zip
