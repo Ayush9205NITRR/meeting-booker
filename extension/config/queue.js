@@ -17,6 +17,52 @@
 // ─────────────────────────────────────────────────────────────────────
 
 window.KylasQueueConfig = {
+  // Accounts, not loose contacts: a BD chases a company, not five people at
+  // one. An account takes the BEST stage any of its contacts has reached,
+  // which is the rule kylas-airtable-sync uses for Account Pipeline Stage
+  // (BD) — using the same rule is what stops the overlay and the sync
+  // disagreeing about where an account stands. Set to "contact" to go back
+  // to listing individual contacts.
+  groupBy: "account",
+
+  // Rank order, best first. Copied from kylas-airtable-sync's
+  // config/account_pipeline_order.json; keep the two in step.
+  accountStageOrder: [
+      "SQL (Sales Qualified Lead)",
+      "Discovery Call Done - Awaiting Client Inputs",
+      "Closing Loops - Low Value",
+      "Reschedule Pending",
+      "Discovery Call No-Show",
+      "Discovery Call Booked",
+      "Follow-up (1)",
+      "Follow-up (2)",
+      "Follow-up (3)",
+      "Followup - CNC",
+      "MQL (Marketing Qualified Lead)",
+      "Activation",
+      "Offsite Delayed",
+      "Offsite Done (Late Reachout)",
+      "Not Interested",
+      "Connect Later",
+      "CNC (Could Not Connect) - 3",
+      "CNC (Could Not Connect) - 2",
+      "CNC (Could Not Connect) - 1",
+      "Disqualified - Wrong POC",
+      "Invalid Contact",
+      "Not a Decision Maker (NDM)",
+      "POC - Organization - Changed",
+      "LinkedIn Outreach Initiated"
+  ],
+
+  // Real spellings that exist in Kylas, so a rename there doesn't quietly
+  // drop accounts to unranked.
+  accountStageAliases: {
+      "Offsite Done": "Offsite Done (Late Reachout)",
+      "Offsite Dealyed": "Offsite Delayed",
+      "POC - Organisation - Changed": "POC - Organization - Changed",
+      "Yet to Be Mined": "LinkedIn Outreach Initiated"
+  },
+
   buckets: [
     {
       id: "toExhaust",
