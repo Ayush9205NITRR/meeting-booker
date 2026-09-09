@@ -131,6 +131,11 @@
 
     <button id="save">Save</button>
     <div id="status"></div>
+    <!-- Which build is actually loaded. Reloading an extension re-reads
+         the folder it was loaded FROM, so a copy unpacked from an old zip
+         stays old however many times you press reload — and there is
+         otherwise nothing on screen that says so. -->
+    <div id="version" class="hint"></div>
     <script src="popup.js"></script>
   </body>
 </html>

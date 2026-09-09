@@ -531,9 +531,6 @@
       <textarea id="ko-notes" placeholder="Context for whoever takes this call…">${esc(state.notes)}</textarea>
 
       <div class="ko-assoc">
-        <div class="ko-kv"><span>Company</span><span>${
-          co ? esc(co.name) : '<span class="ko-empty-value">resolving from contact…</span>'
-        }</span></div>
         <div class="ko-kv"><span>Contact</span><span>${
           ct ? esc(ct.name) : `#${esc(state.contactId || "")}`
         }</span></div>
@@ -593,6 +590,13 @@
         }</span></div>
         <div class="ko-kv"><span>When</span><span>${esc(r.when || "")}</span></div>
         <div class="ko-kv"><span>Invited</span><span>${esc(String(r.guests || ""))}</span></div>
+        ${
+          r.organiser
+            ? `<div class="ko-kv${
+                r.hostedOn === "self" ? " flagged" : ""
+              }"><span>Organiser</span><span>${esc(r.organiser)}</span></div>`
+            : ""
+        }
         ${r.dealId ? `<div class="ko-kv"><span>Deal</span><span>${esc(r.dealId)}</span></div>` : ""}
         ${r.conflict ? `<div class="ko-kv flagged"><span>Heads up</span><span>${esc(r.conflict)}</span></div>` : ""}
         ${r.note ? `<div class="ko-kv"><span>Note</span><span>${esc(r.note)}</span></div>` : ""}

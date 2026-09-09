@@ -1,3 +1,5 @@
+const MANIFEST = chrome.runtime.getManifest();
+
 const FIELDS = [
   "airtablePat",
   "airtableBaseId",
@@ -91,3 +93,8 @@ el("save").addEventListener("click", async () => {
     setStatus("Saved, but Airtable could not be reached.", "err");
   }
 });
+
+// Shown at the bottom of the popup so "did my reload take?" is answerable
+// without digging through chrome://extensions.
+document.getElementById("version").textContent =
+  "Version " + MANIFEST.version + " · loaded from " + chrome.runtime.id.slice(0, 8);

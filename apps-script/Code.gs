@@ -414,7 +414,11 @@ function bookMeeting(payload) {
       start: { dateTime: iso_(start), timeZone: TZ },
       end:   { dateTime: iso_(end),   timeZone: TZ },
       attendees: attendees,
-      guestsCanModify: false,
+      // Whoever ends up organising, the people on the call need to be able
+      // to move it, add someone, or cancel it. With this false the invite
+      // is read-only to everyone but the organiser — which is why a POC
+      // who received the invite couldn't manage their own meeting.
+      guestsCanModify: true,
       guestsCanInviteOthers: true,
       conferenceData: {
         createRequest: { requestId: Utilities.getUuid(),
@@ -431,17 +435,21 @@ function bookMeeting(payload) {
     let ev = null, hostedOn = 'primary', note = null;
     function onSelf_() { return Calendar.Events.insert(resource, 'primary', opts); }
 
+    let organiser = primary.email;
     if (BOOKING_MODE === 'onSelf' || primary.email === acct) {
-      ev = onSelf_(); hostedOn = 'self';
+      ev = onSelf_(); hostedOn = 'self'; organiser = acct;
     } else {
       try {
         ev = Calendar.Events.insert(resource, primary.email, opts);
       } catch (writeErr) {
         // Any write failure on their calendar falls back to ours, so the
-        // slot still gets blocked rather than the booking dying.
-        ev = onSelf_(); hostedOn = 'self';
-        note = 'Sent from your side rather than written to ' + primary.name +
-               "'s calendar. Their slot holds once they accept.";
+        // slot still gets blocked rather than the booking dying. It used
+        // to fall back quietly, which is how meetings ended up organised
+        // by the wrong person with nobody noticing.
+        ev = onSelf_(); hostedOn = 'self'; organiser = acct;
+        note = "Organised by " + acct + " rather than " + primary.name +
+               ", because their calendar could not be written to. They can " +
+               "still edit it — ask them to share write access to remove this.";
       }
     }
 
@@ -457,6 +465,9 @@ function bookMeeting(payload) {
       totalPlayers: PLAYERS.length,
       link: ev.htmlLink,
       meet: ev.hangoutLink || null,
+      // Reported on every booking, not just the fallback, so "who is the
+      // organiser" is something you can see rather than infer.
+      organiser: organiser,
       conflict: conflict,
       hostedOn: hostedOn,
       note: note
