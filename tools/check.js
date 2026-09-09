@@ -27,8 +27,12 @@ console.log('\nApps Script (apps-script/)');
 // Every .gs in the folder, not a fixed list: once "Import from Apps
 // Script" has run, Code.gs and anything else the project holds live here
 // too, and they have to pass the same checks.
+// Both extensions: Apps Script's own name for these is .gs, but clasp 3
+// writes .js unless told otherwise, so a project can legitimately hold
+// either. They all become server code in the same global namespace, so
+// the checks below apply to both.
 const gsFiles = fs.readdirSync(path.join(root, 'apps-script'))
-  .filter((f) => f.endsWith('.gs'))
+  .filter((f) => f.endsWith('.gs') || f.endsWith('.js'))
   .sort();
 
 const sources = {};
@@ -44,7 +48,7 @@ for (const name of gsFiles) {
 // check that catches a helper in Kylas.gs colliding with one in Code.gs.
 try {
   new Function(gsFiles.map((n) => sources[n]).join('\n'));
-  ok(gsFiles.length + ' .gs file(s) share no top-level names');
+  ok(gsFiles.length + ' script file(s) share no top-level names');
 } catch (e) {
   bad('the .gs files do not parse together: ' + e.message);
 }
@@ -57,7 +61,7 @@ if (!overlay) bad('apps-script/Overlay.gs is missing');
 // Until the import has run, the live project's own files aren't here yet.
 // Deploying in that state would delete them, so say so loudly — the deploy
 // workflow refuses on the same condition.
-if (!gsFiles.includes('Code.gs')) {
+if (!gsFiles.includes('Code.gs') && !gsFiles.includes('Code.js')) {
   warn('Code.gs is not in the repo yet — run the "Import from Apps Script" workflow before deploying');
 }
 

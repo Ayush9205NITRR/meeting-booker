@@ -95,7 +95,7 @@ jobs:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           mkdir -p pulled
-          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > pulled/.clasp.json
+          printf '{"scriptId":"%s","rootDir":".","scriptExtensions":["gs","js"]}\n' "$SCRIPT_ID" > pulled/.clasp.json
           cd pulled && clasp pull
           rm -f .clasp.json
           echo "--- pulled ---"
@@ -115,7 +115,8 @@ jobs:
 
       - name: Sanity check
         run: |
-          test -f apps-script/Code.gs || { echo "::error::No Code.gs came back — is APPS_SCRIPT_ID the right project?"; exit 1; }
+          [ -f apps-script/Code.gs ] || [ -f apps-script/Code.js ] \
+            || { echo "::error::No Code.gs/Code.js came back — is APPS_SCRIPT_ID the right project?"; exit 1; }
           npm run check
 
       - name: Commit

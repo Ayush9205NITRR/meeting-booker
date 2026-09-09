@@ -60,7 +60,7 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         run: |
           missing=""
-          [ -f apps-script/Code.gs ] || missing="$missing Code.gs"
+          [ -f apps-script/Code.gs ] || [ -f apps-script/Code.js ] || missing="$missing Code.gs"
           ls apps-script/*.html >/dev/null 2>&1 || missing="$missing (any .html)"
           if [ -n "$missing" ]; then
             echo "::error::apps-script/ is missing:$missing — pushing would DELETE them from the live project. Run the 'Import from Apps Script' workflow first."
@@ -132,7 +132,7 @@ jobs:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           cd apps-script
-          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > .clasp.json
+          printf '{"scriptId":"%s","rootDir":".","scriptExtensions":["gs","js"]}\n' "$SCRIPT_ID" > .clasp.json
           clasp push --force
           rm -f .clasp.json
 
@@ -150,7 +150,7 @@ jobs:
             exit 1
           fi
           cd apps-script
-          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > .clasp.json
+          printf '{"scriptId":"%s","rootDir":".","scriptExtensions":["gs","js"]}\n' "$SCRIPT_ID" > .clasp.json
           clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${{ github.sha }}"
           rm -f .clasp.json
           echo "::notice::Live. The /exec URL is unchanged."
