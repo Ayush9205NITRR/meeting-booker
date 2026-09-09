@@ -28,6 +28,19 @@ Kylas Contact page   →  "Book Meeting"     →  meeting type → slots → con
   are still needed to see how/where that's wired in before the
   `bookMeeting`/`addNotes` endpoints below can be finished.
 
+## Changing what the overlay shows
+
+Edit [`config/overlay-config.json`](config/overlay-config.json) on github.com
+and commit. Every BD's overlay follows within ten minutes — no reinstall, no
+deploy, no developer. That file controls the company panel's fields and the
+home-page queue's buckets; GitHub validates it on commit, and a bad edit
+leaves everyone on the previous version rather than breaking anything.
+
+See [`config/README.md`](config/README.md) for the format, and
+[`.github/workflows/README.md`](.github/workflows/README.md) for what else
+runs on GitHub — including the one thing that can't (Actions cannot serve
+requests, so booking still needs the Apps Script web app).
+
 ## Setup
 
 The company overlay and the meeting booking are independent. The overlay

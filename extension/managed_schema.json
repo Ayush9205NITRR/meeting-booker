@@ -28,6 +28,11 @@
       "title": "POC Router web app URL",
       "description": "Only needed for meeting booking.",
       "type": "string"
+    },
+    "configUrl": {
+      "title": "Overlay config URL",
+      "description": "Raw URL of config/overlay-config.json in the meeting-booker repo. Only set this to point a team at a branch other than main.",
+      "type": "string"
     }
   }
 }

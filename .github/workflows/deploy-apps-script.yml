@@ -1,0 +1,120 @@
+# Pushes poc-router/*.gs into the Apps Script project that backs the
+# extension, so the .gs files are edited on GitHub instead of pasted into
+# the Apps Script editor by hand.
+#
+# ── The thing this workflow exists to avoid ───────────────────────────
+# `clasp push --force` makes the project match the local folder exactly:
+# any file in the project that is NOT in the folder is DELETED. Pointing
+# this repo straight at the POC Router script id would therefore delete
+# Code.gs and index.html — the booking engine and the whole POC Router UI.
+#
+# So it pulls the live project first, drops our files on top, and pushes
+# the merged result. Files this repo doesn't know about survive untouched.
+# ──────────────────────────────────────────────────────────────────────
+
+name: Deploy Apps Script
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Also update the live web app deployment (otherwise just pushes the code)"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "poc-router/**"
+      - ".github/workflows/deploy-apps-script.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Skips cleanly rather than failing the commit when the clasp secrets
+    # aren't set up yet, which is the state until someone does the setup.
+    if: github.repository_owner != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run checks
+        run: npm run check
+
+      - name: Check secrets
+        id: secrets
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "::warning::CLASPRC_JSON / APPS_SCRIPT_ID not set — skipping deploy. See poc-router/README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install clasp
+        if: steps.secrets.outputs.ready == 'true'
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: Authenticate
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+
+      # Pull first. This is the whole safety mechanism: build/ starts as an
+      # exact copy of the live project, so pushing it back can only change
+      # the files we deliberately overwrite.
+      - name: Pull live project
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          mkdir -p build
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > build/.clasp.json
+          cd build && clasp pull
+          echo "--- live project before push ---"
+          ls -1
+
+      - name: Overlay this repo's files
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          cp poc-router/*.gs build/
+          echo "--- after overlay ---"
+          ls -1 build
+
+      # A last guard, in case a future edit to this workflow drops the pull
+      # step: refuse to push a folder that has lost the POC Router's own
+      # files rather than deleting them in the live project.
+      - name: Refuse to delete Code.gs
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          cd build
+          if ls Code.gs >/dev/null 2>&1 || ls *.html >/dev/null 2>&1; then
+            echo "POC Router files present — safe to push."
+          else
+            echo "::error::build/ has neither Code.gs nor any .html. Pushing would delete them from the live project. Aborting."
+            exit 1
+          fi
+
+      - name: Push
+        if: steps.secrets.outputs.ready == 'true'
+        run: cd build && clasp push --force
+
+      # Updates the EXISTING deployment in place, so the /exec URL already
+      # pasted into every BD's extension popup keeps working. A bare
+      # `clasp deploy` would mint a new URL that nobody is pointing at.
+      - name: Update the live deployment
+        if: steps.secrets.outputs.ready == 'true' && inputs.deploy
+        env:
+          DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+        run: |
+          if [ -z "$DEPLOYMENT_ID" ]; then
+            echo "::error::APPS_SCRIPT_DEPLOYMENT_ID not set — code is pushed, but the live web app still runs the previous version."
+            exit 1
+          fi
+          cd build && clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${{ github.sha }}"

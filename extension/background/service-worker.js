@@ -38,6 +38,7 @@ try {
 }
 
 importScripts("airtable.js");
+importScripts("remote-config.js");
 
 const MOCK_MODE_NOTICE =
   "Demo data — no Airtable token set yet. Open the extension popup and paste a " +
@@ -171,13 +172,22 @@ async function handleRequest(action, payload) {
       // Airtable first — it needs no server, so it's the path that works
       // for a BD who has done nothing but paste a token.
       const direct = await airtableCompanyLookup(payload.companyId);
-      if (direct) return direct;
+      const result =
+        direct ||
+        (await callBackend({ action: "companyOverlay", companyId: payload.companyId })) ||
+        mockCompanyOverlay(payload.companyId);
 
-      const result = await callBackend({
-        action: "companyOverlay",
-        companyId: payload.companyId,
-      });
-      return result || mockCompanyOverlay(payload.companyId);
+      // Which columns get drawn is decided by config/overlay-config.json in
+      // the repo. The Airtable-direct path can't know that (it only reads a
+      // row), and the backend only sends a layout if the Airtable config
+      // table exists — so whatever GitHub says wins over neither of them
+      // having an opinion, and the bundled field-map.js stays the last
+      // resort inside the content script.
+      if (result && !result.layout) {
+        const layout = companyLayoutFrom(await loadRemoteConfig());
+        if (layout) result.layout = layout;
+      }
+      return result;
     }
     case "getNextSlots": {
       const result = await callBackend({
@@ -223,13 +233,18 @@ async function handleRequest(action, payload) {
         action: "myContacts",
         ownerEmail: payload.ownerEmail || "",
       });
-      return (
-        result || {
-          ok: false,
-          error:
-            "No booking backend configured yet — set the POC Router URL in the extension popup.",
-        }
-      );
+      const response = result || {
+        ok: false,
+        error:
+          "No booking backend configured yet — set the POC Router URL in the extension popup.",
+      };
+
+      // Same idea as the company layout: the buckets are editable on
+      // GitHub, so they travel with the data rather than being frozen into
+      // whatever build the BD happens to have installed.
+      const queueConfig = queueConfigFrom(await loadRemoteConfig());
+      if (queueConfig) response.queueConfig = queueConfig;
+      return response;
     }
     case "bookMeeting": {
       const result = await postBackend({ action: "bookMeeting", ...payload });

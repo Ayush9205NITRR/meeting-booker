@@ -4,14 +4,16 @@
 // contacts: the backend resolves who is signed in and filters by owner,
 // so this is per-BDR without anyone choosing a filter.
 //
-// What the buckets are lives in config/queue.js — edit that, not this.
+// What the buckets are lives in config/overlay-config.json in the repo —
+// edit that on GitHub and every BD follows within ten minutes.
+// config/queue.js is only the fallback for when that file can't be read.
 
 (function () {
   // Needs a capture group: watchRecordId reports match[1], so a pattern
   // without one never fires.
   const HOME_PATH = /\/sales\/(home)/;
 
-  const config = (window.KylasQueueConfig && window.KylasQueueConfig.buckets) || [];
+  let config = (window.KylasQueueConfig && window.KylasQueueConfig.buckets) || [];
 
   let panel = null;
   let state = { loading: true, error: "", contacts: null, owner: null, open: null, showStages: false };
@@ -180,6 +182,11 @@
         state.contacts = res.contacts || [];
         state.owner = res.owner || null;
         state.error = "";
+        // Buckets edited on GitHub arrive with the data. An empty list is
+        // ignored rather than drawn, so a bad commit can't leave a BD
+        // staring at a queue with no buckets in it.
+        const remote = res.queueConfig && res.queueConfig.buckets;
+        if (Array.isArray(remote) && remote.length) config = remote;
       }
     } catch (err) {
       state.error = String(err);

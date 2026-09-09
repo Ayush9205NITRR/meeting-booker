@@ -17,4 +17,13 @@
 
 self.KylasOverlaySecrets = {
   airtablePat: "",
+
+  // POC Router /exec URL. Only needed for meeting booking — the company
+  // overlay works on the PAT alone.
+  backendUrl: "",
+
+  // Where the overlay reads its layout and queue buckets from. Leave
+  // blank to use config/overlay-config.json on main, which is what you
+  // want unless you are testing a change on a branch first.
+  configUrl: "",
 };

@@ -1,0 +1,102 @@
+{
+  "$comment": [
+    "THE CONTROL PANEL. Edit this file on GitHub and every BD's overlay picks",
+    "the change up within 10 minutes — no extension reinstall, no deploy, no",
+    "developer. Commit to main and you're done.",
+    "",
+    "Two sections:",
+    "  company — what the overlay shows on a company record. Column names must",
+    "            match the `Company List` Airtable table exactly. A name that",
+    "            doesn't exist is skipped silently, so a typo costs a missing",
+    "            row, not a broken panel. Click 'Show all fields' at the bottom",
+    "            of the overlay to see the real column names.",
+    "  queue   — the buckets on https://app.kylas.io/sales/home.",
+    "",
+    "If this file is unreachable or malformed, the extension falls back to the",
+    "copies bundled in extension/config/. Nothing breaks; you just lose remote",
+    "control until it's valid again. CI validates it on every push."
+  ],
+
+  "version": 1,
+
+  "company": {
+    "header": {
+      "name": ["Company Name - Kylas", "Company Name", "Name", "Company Name - Kylas copy"],
+      "subtitle": ["Industry", "Industry (Kylas)"],
+      "subtitleType": "text"
+    },
+
+    "badges": ["Account Pipeline Stage"],
+
+    "stats": {
+      "Total POCs": "Total POCs",
+      "Connected": "Connected POCs",
+      "MQL": "MQL POCs"
+    },
+
+    "fields": {
+      "Status of reachout": "Status of Reachout",
+      "Source of data": "Source of Data",
+      "Funding type": "Latest Funding Type",
+      "Funding amount": "Latest Funding Amount",
+      "Website": { "field": "Website", "type": "link" },
+      "LinkedIn": { "field": "linkedin - Appollo", "type": "link" }
+    },
+
+    "notes": {}
+  },
+
+  "queue": {
+    "buckets": [
+      {
+        "id": "toExhaust",
+        "label": "To exhaust",
+        "hint": "Worth another attempt before they go cold",
+        "stages": [
+          "CNC (Could Not Connect) - 1",
+          "CNC (Could Not Connect) - 2",
+          "Connect Later"
+        ]
+      },
+      {
+        "id": "fresh",
+        "label": "Fresh",
+        "hint": "Never called",
+        "rule": "neverCalled"
+      },
+      {
+        "id": "mql",
+        "label": "MQL",
+        "hint": "Qualified, mid follow-up",
+        "stages": [
+          "MQL (Marketing Qualified Lead)",
+          "Follow-up (1)",
+          "Follow-up (2)",
+          "Follow-up (3)",
+          "Followup - CNC"
+        ]
+      },
+      {
+        "id": "activation",
+        "label": "Activation",
+        "stages": ["Activation"]
+      },
+      {
+        "id": "discovery",
+        "label": "Discovery call",
+        "stages": [
+          "Discovery Call Booked",
+          "Discovery Call Done - Awaiting Client Inputs",
+          "Discovery Call No-Show"
+        ]
+      },
+      {
+        "id": "today",
+        "label": "Connect today",
+        "hint": "Next call date is today",
+        "rule": "nextCallToday",
+        "accent": true
+      }
+    ]
+  }
+}

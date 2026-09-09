@@ -1,0 +1,10 @@
+{
+  "name": "meeting-booker",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Kylas overlay Chrome extension and its Apps Script backend.",
+  "scripts": {
+    "check": "node tools/check.js",
+    "check:config": "node tools/check-config.js"
+  }
+}
