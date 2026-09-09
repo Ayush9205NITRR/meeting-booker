@@ -31,11 +31,21 @@
 const KYLAS = {
   base: 'https://api.kylas.io/v1',
 
-  // Deal pipelines per booking type. kylasSetup() prints the ids.
+  // Where a deal lands, per booking type. Read from the tenant with
+  // kylasSetup(); re-run it if pipelines are renamed or replaced.
+  //
+  // All three point at the same pipeline and stage on purpose. Kylas has
+  // no "Active Requirement" or "Discovery Call" pipeline — the two active
+  // deal pipelines are Demand Funnel and Marketing Funnel — and the BD
+  // team's decision is that these bookings are the same deal, told apart
+  // by name rather than by pipeline.
+  //
+  // Used as the fallback when the overlay's dropdown couldn't load. When
+  // the BD picked a pipeline, that choice wins.
   pipelines: {
-    Requirement:  { pipelineId: 0, stageId: 0, name: 'Active Requirement' },
-    Discovery:    { pipelineId: 0, stageId: 0, name: 'Discovery Call' },
-    DemandFunnel: { pipelineId: 0, stageId: 0, name: 'Demand Funnel' }
+    Requirement:  { pipelineId: 32572, stageId: 227155, name: 'Active Requirement' },
+    Discovery:    { pipelineId: 32572, stageId: 227155, name: 'Discovery Call' },
+    DemandFunnel: { pipelineId: 32572, stageId: 227155, name: 'Demand Funnel' }
   },
 
   // INR. kylasSetup() prints what the tenant actually uses.
@@ -232,12 +242,20 @@ function kylasOnBooked_(p) {
     }
   }
 
+  // KYLAS.pipelines existed but nothing read it, so a booking whose
+  // pipeline dropdown failed to load died on "A deal needs a pipeline and
+  // stage id" — with a perfectly good default sitting right there. The
+  // BD's choice still wins; this only fills a gap.
+  const fallback = KYLAS.pipelines[p.callType] || KYLAS.pipelines.Requirement;
+  const pipelineId = deal.pipelineId || fallback.pipelineId;
+  const stageId = deal.stageId || fallback.stageId;
+
   try {
     const created = kylasCreateDeal_({
-      name: deal.name,
+      name: deal.name || fallback.name,
       ownerId: ownerId,
-      pipelineId: deal.pipelineId,
-      stageId: deal.stageId,
+      pipelineId: pipelineId,
+      stageId: stageId,
       companyId: deal.companyId,
       companyName: p.company,
       contactId: deal.contactId || p.contactId,
