@@ -392,13 +392,15 @@ function kylasProbePipelines() {
 function kylasSetup() {
   Logger.log('Deal pipelines');
   try {
-    const raw = kylasFetch_('GET', '/pipelines/search?page=0&size=100&sort=updatedAt,desc');
-    const list = raw.content || raw.data || [];
+    // Shares Overlay.gs's fetch so there is one definition of "which
+    // endpoint, and how stages are filled in" rather than two that can
+    // drift apart. Uncached, so this shows the live answer.
+    const list = overlayDealPipelinesFresh_();
+    if (!list.length) Logger.log('  none came back — check the API key has access to deals');
     list.forEach(function (p) {
-      const type = String(p.entityType || '').toLowerCase();
-      if (type && type !== 'deal') return;
       Logger.log('  [' + p.id + '] ' + p.name);
-      (p.stages || p.pipelineStages || []).forEach(function (s, i) {
+      if (!p.stages.length) Logger.log('       (no stages — a deal cannot be created here)');
+      p.stages.forEach(function (s, i) {
         Logger.log('       ' + (i === 0 ? '(first) ' : '       ') + '[' + s.id + '] ' + s.name);
       });
     });

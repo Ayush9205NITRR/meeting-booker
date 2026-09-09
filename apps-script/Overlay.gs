@@ -465,19 +465,40 @@ function overlayDealPipelines_() {
   const cached = cache.get('overlayPipelines');
   if (cached) return JSON.parse(cached);
 
-  const raw = overlayKylasGet_('/v1/pipelines/search?page=0&size=100&sort=updatedAt,desc');
+  const pipelines = overlayDealPipelinesFresh_();
+  cache.put('overlayPipelines', JSON.stringify(pipelines), 600);
+  return pipelines;
+}
+
+/**
+ * Uncached, so kylasSetup() shows what Kylas says right now rather than
+ * what was true ten minutes ago.
+ *
+ * The endpoint is GET /pipelines?entityType=deal, established by probing:
+ * /pipelines/search answers 400 to a GET and, as a POST, returns all five
+ * pipelines including the Lead ones. This returns the three deal pipelines
+ * and nothing else, so the filtering happens in Kylas rather than here.
+ */
+function overlayDealPipelinesFresh_() {
+  const raw = overlayKylasGet_('/v1/pipelines?entityType=deal');
   const list = raw.content || raw.data || (Array.isArray(raw) ? raw : []);
 
-  const pipelines = list
-    .filter(function (p) {
-      const type = String(p.entityType || p.entity || '').toLowerCase();
-      // Keep deal pipelines; if a tenant doesn't set entityType, keep it
-      // rather than silently offering nothing.
-      return !type || type === 'deal';
-    })
+  return list
     .filter(function (p) { return p.active !== false; })
     .map(function (p) {
-      const stages = p.stages || p.pipelineStages || [];
+      // A list response doesn't always carry stages. Fetching the pipeline
+      // on its own does, and a pipeline with no stages is useless here —
+      // a deal has to be created in one.
+      let stages = p.stages || p.pipelineStages || [];
+      if (!stages.length) {
+        try {
+          const full = overlayKylasGet_('/v1/pipelines/' + p.id);
+          stages = full.stages || full.pipelineStages || [];
+        } catch (err) {
+          stages = [];
+        }
+      }
+
       return {
         id: p.id,
         name: p.name || ('Pipeline ' + p.id),
@@ -486,9 +507,6 @@ function overlayDealPipelines_() {
         })
       };
     });
-
-  cache.put('overlayPipelines', JSON.stringify(pipelines), 600);
-  return pipelines;
 }
 
 /**
