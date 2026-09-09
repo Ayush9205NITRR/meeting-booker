@@ -69,9 +69,36 @@ jobs:
           echo "Project looks complete:"
           ls -1 apps-script
 
+      # clasp 2 and clasp 3 store credentials differently, and clasp's own
+      # message for the wrong one ("Could not read API credentials") doesn't
+      # say which. Check the shape here so the failure names the fix.
+      - name: Check the credential format
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          # Read from the env rather than a temp file, so the credential never
+          # touches the runner's disk outside the one place clasp needs it.
+          node -e '
+            let c;
+            try { c = JSON.parse(process.env.CLASPRC_JSON); }
+            catch (e) { console.log("::error::CLASPRC_JSON is not valid JSON. Copy the whole file, { to }."); process.exit(1); }
+
+            if (c.tokens && c.tokens.default && c.tokens.default.refresh_token) {
+              console.log("Credential format looks right (clasp 3).");
+              process.exit(0);
+            }
+            if (c.token && c.token.refresh_token) {
+              console.log("::error::That is a clasp 2 credential file. Run `npm install -g @google/clasp@3.4.1` then `clasp login --no-localhost` again, and replace the CLASPRC_JSON secret.");
+              process.exit(1);
+            }
+            console.log("::error::CLASPRC_JSON has no refresh_token in it. Re-run `clasp login --no-localhost`, then copy all of ~/.clasprc.json.");
+            process.exit(1);
+          '
+
       - name: Install clasp
         if: steps.secrets.outputs.ready == 'true'
-        run: npm install -g @google/clasp@2.4.2
+        run: npm install -g @google/clasp@3.4.1
 
       - name: Push
         if: steps.secrets.outputs.ready == 'true'
