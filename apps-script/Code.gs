@@ -352,9 +352,13 @@ function findNextSlots(duration, count) {
  * payload = { you, primaryEmail, localStart, duration, title, company,
  *             callType, reviewers[], externals[] }
  *
- * Only genuinely unusable input is rejected: a missing booker, a missing
- * POC, an empty title, an unreadable date, a malformed guest address.
- * Clashes and missing calendar access are reported, never blocking.
+ * Only genuinely unusable input is rejected: a missing booker, an empty
+ * title, an unreadable date, a malformed guest address. Clashes and
+ * missing calendar access are reported, never blocking.
+ *
+ * primaryEmail is optional. A discovery call has no tentative POC — none
+ * of the players joins it — so the booker runs it alone and no player
+ * calendar is held.
  */
 function bookMeeting(payload) {
   const lock = LockService.getScriptLock();
@@ -366,20 +370,25 @@ function bookMeeting(payload) {
     if (BOOKERS.indexOf(String(p.you).trim().toLowerCase()) === -1) {
       throw new Error('That email is not on the list of people who can book.');
     }
-    if (!p.primaryEmail) throw new Error('Pick the tentative POC.');
     if (!p.title || !String(p.title).trim()) throw new Error('The invite needs a title.');
 
-    const primary = PLAYERS.filter(function (x) { return x.email === p.primaryEmail; })[0];
-    if (!primary) throw new Error('That person is not on the players list.');
+    // No POC is a valid booking, not a missing field. One that is named
+    // but unknown still is an error — that is a bad payload, not a choice.
+    const wantsPoc = !!(p.primaryEmail && String(p.primaryEmail).trim());
+    const primary = wantsPoc
+      ? PLAYERS.filter(function (x) { return x.email === p.primaryEmail; })[0]
+      : null;
+    if (wantsPoc && !primary) throw new Error('That person is not on the players list.');
 
     const start = parseLocal_(p.localStart);
     if (isNaN(start.getTime())) throw new Error('Could not read that date and time.');
     const mins = Math.max(5, Math.min(480, Number(p.duration) || DEFAULT_DURATION));
     const end  = new Date(start.getTime() + mins * 60000);
 
-    // Look, but never stop. Whatever we find gets reported back.
+    // Look, but never stop. Whatever we find gets reported back. With no
+    // POC there is no third calendar to clash with.
     let conflict = null;
-    try {
+    if (primary) try {
       const cal = (freeBusy_([primary.email], start, end).calendars || {})[primary.email] || {};
       if ((cal.errors || []).length) {
         conflict = "Couldn't read " + primary.name + "'s calendar, so a clash can't be ruled out.";
@@ -401,14 +410,16 @@ function bookMeeting(payload) {
       attendees.push({ email: e, optional: !!optional });
     }
 
-    add_(primary.email, false);          // the POC — required
-    add_(p.you, false);                  // you booked it
+    if (primary) add_(primary.email, false);   // the POC — required
+    add_(p.you, false);                        // you booked it
 
     // Hold the slot on everyone's calendar. Non-POC players go on as
     // optional, so the invite still lands and blocks their time without
-    // telling them they have to show up.
-    let playersBlocked = 1;
-    if (BLOCK_ALL_PLAYERS) {
+    // telling them they have to show up. Without a POC nobody is held:
+    // holding every player for a call none of them attends is exactly the
+    // wasted time this is meant to avoid.
+    let playersBlocked = primary ? 1 : 0;
+    if (BLOCK_ALL_PLAYERS && primary) {
       PLAYERS.forEach(function (x) {
         if (x.email === primary.email) return;
         if (!seen[x.email.toLowerCase()]) playersBlocked++;
@@ -448,7 +459,7 @@ function bookMeeting(payload) {
                          conferenceSolutionKey: { type: 'hangoutsMeet' } }
       },
       extendedProperties: {
-        private: { pocRouter: 'true', primary: primary.email, bookedBy: p.you,
+        private: { pocRouter: 'true', primary: primary ? primary.email : '', bookedBy: p.you,
                    company: p.company || '', callType: p.callType || '' }
       }
     };
@@ -485,11 +496,13 @@ function bookMeeting(payload) {
       }
     }
 
-    stampRotation_(primary.email);
+    // The rotation tracks who last led a call. A call with no POC moves
+    // nobody down the list.
+    if (primary) stampRotation_(primary.email);
 
     return {
       ok: true,
-      primary: primary.name,
+      primary: primary ? primary.name : null,
       title: resource.summary,
       when: Utilities.formatDate(start, TZ, 'EEE d MMM') + ' · ' + hhmm_(start) + '–' + hhmm_(end),
       guests: attendees.length,

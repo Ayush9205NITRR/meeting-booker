@@ -184,6 +184,13 @@ The extension's contact overlay is a port of `src/index.html`, so it sends
 }
 ```
 
+`primaryEmail` is optional. A **Discovery** call has no tentative POC — none
+of the players joins it — so the overlay sends it empty, and `bookMeeting`
+then invites only the booker, the contact owner, the chosen reviewers and
+the client side. No player calendar is held and the rotation does not move.
+An **Active requirement** still requires one. A `primaryEmail` that is sent
+but is not on `PLAYERS` is still an error; only an absent one is a choice.
+
 `contactId` is what makes the deal possible without the BD retyping
 anything. The company typed into the form is only for the invite title; the
 deal needs the real Kylas records.

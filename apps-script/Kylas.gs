@@ -237,10 +237,15 @@ function kylasOnBooked_(p) {
 
   // The overlay knows the POC by email — Google addresses are what the
   // calendar side works in. Kylas wants its own user id, so translate.
+  //
+  // A discovery call has no POC, so the deal belongs to the BD who booked
+  // it. Without this fallback that deal would land on the API key account
+  // and drop out of everyone's pipeline view.
   let ownerId = p.ownerId || null;
-  if (!ownerId && p.primaryEmail) {
+  const ownerEmail = (p.primaryEmail && String(p.primaryEmail).trim()) || p.you || '';
+  if (!ownerId && ownerEmail) {
     try {
-      ownerId = kylasUserIdByEmail_(p.primaryEmail);
+      ownerId = kylasUserIdByEmail_(ownerEmail);
     } catch (err) {
       out.errors.push('Owner lookup: ' + err.message);
     }

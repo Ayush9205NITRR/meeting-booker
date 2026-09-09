@@ -162,6 +162,8 @@ function overlayBookMeeting_(p) {
       contactId:    p.contactId,
       ownerId:      p.ownerId,
       primaryEmail: p.primaryEmail,
+      // With no POC the deal belongs to whoever booked it.
+      you:          p.you,
       company:      p.company,
       callType:     p.callType,
       notes:        p.notes,

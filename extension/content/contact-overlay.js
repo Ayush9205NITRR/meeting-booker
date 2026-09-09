@@ -17,14 +17,20 @@
   const CONTACT_PATH = /\/sales\/contacts\/details\/(\d+)/;
   const REFRESH_MS = 45000;
 
-  // The three deal types. `pipelineHint` is matched against the pipeline
-  // names Kylas returns so the right one is preselected — the BD can always
+  // The deal types. `pipelineHint` is matched against the pipeline names
+  // Kylas returns so the right one is preselected — the BD can always
   // override with the dropdown, so a miss costs a click, not a wrong deal.
+  //
+  // `poc` says whether one of our players leads the call. A discovery call
+  // is run by the BD who books it; the POCs are not on it, so asking for
+  // one — and blocking every player's calendar for it — was holding time
+  // for people who were never going to join.
   const TYPES = [
-    { id: "Requirement", label: "Active requirement", deal: "Active Requirement", pipelineHint: "demand funnel" },
-    { id: "Discovery", label: "Discovery", deal: "Discovery Call", pipelineHint: "demand funnel" },
+    { id: "Requirement", label: "Active requirement", deal: "Active Requirement", pipelineHint: "demand funnel", poc: true },
+    { id: "Discovery", label: "Discovery", deal: "Discovery Call", pipelineHint: "demand funnel", poc: false },
   ];
   const typeOf = (id) => TYPES.find((t) => t.id === id) || TYPES[0];
+  const needsPoc = () => typeOf(state.callType).poc !== false;
 
   const state = {
     contactId: null,
@@ -113,7 +119,7 @@
     };
 
     const b = state.board;
-    const poc = b && b.players.find((p) => p.email === state.primary);
+    const poc = needsPoc() && b && b.players.find((p) => p.email === state.primary);
     if (poc) add(poc.email, poc.name, "POC — leads the call");
     add(state.you, state.you && state.you.split("@")[0], "You — booking it");
 
@@ -123,7 +129,7 @@
     if (owner && owner.email) add(owner.email, owner.name, "Contact owner");
 
     // Every other player, so the slot is held on all their calendars.
-    if (b && b.blockAll) {
+    if (b && b.blockAll && needsPoc()) {
       b.players.forEach((p) => add(p.email, p.name, "POC — slot held"));
     }
     if (b) {
@@ -198,6 +204,10 @@
     buildTitle();
     const b = state.board;
     const isReq = state.callType === "Requirement";
+    // Steps are numbered as they are drawn, so dropping the POC step for a
+    // discovery call leaves 1-2-3-4 rather than a gap where 3 used to be.
+    let step = 0;
+    const next = () => ++step;
 
     panel.setBody(`
       ${state.error ? `<div class="ko-error">${esc(state.error)}</div>` : ""}
@@ -224,7 +234,7 @@
       </div>
       ${noticesHtml()}
 
-      <div class="ko-step"><span class="ko-n">1</span><h2>Name the invite</h2></div>
+      <div class="ko-step"><span class="ko-n">${next()}</span><h2>Name the invite</h2></div>
       <div class="ko-seg ko-seg-3">
         ${TYPES.map(
           (t) =>
@@ -244,7 +254,7 @@
         <button class="ko-link" id="ko-edit-title">${state.titleEdited ? "Use generated" : "Edit"}</button>
       </div>
 
-      <div class="ko-step"><span class="ko-n">2</span><h2>Your email</h2></div>
+      <div class="ko-step"><span class="ko-n">${next()}</span><h2>Your email</h2></div>
       <select id="ko-you" class="ko-select${state.you ? "" : " unset"}">
         <option value="">Choose your email…</option>
         ${(b ? b.bookers || [] : [])
@@ -254,23 +264,10 @@
           .join("")}
       </select>
 
-      <div class="ko-step"><span class="ko-n">3</span><h2>Tentative POC</h2>
-        <span class="ko-sub">${
-          b
-            ? `${
-                // freeCount can be absent depending on the backend's shape;
-                // count it rather than printing "undefined of N free".
-                typeof b.freeCount === "number"
-                  ? b.freeCount
-                  : b.players.filter((p) => p.free).length
-              } of ${b.players.length} free`
-            : ""
-        }</span></div>
-      ${whyHtml()}
-      <div class="ko-list" id="ko-roster">${rosterHtml()}</div>
+      ${needsPoc() ? pocHtml(next()) : ""}
 
-      ${b ? guestsHtml() : ""}
-      ${dealHtml()}
+      ${b ? guestsHtml(next()) : ""}
+      ${dealHtml(next())}
 
       <div class="ko-actbar">
         ${flagHtml()}
@@ -296,6 +293,25 @@
     if (b.slot.isPast) out.push("That time has already passed.");
     if (b.slot.outsideHours) out.push("Outside 10am–7pm.");
     return out.map((t) => `<div class="ko-warn">${esc(t)}</div>`).join("");
+  }
+
+  function pocHtml(n) {
+    const b = state.board;
+    return `
+      <div class="ko-step"><span class="ko-n">${n}</span><h2>Tentative POC</h2>
+        <span class="ko-sub">${
+          b
+            ? `${
+                // freeCount can be absent depending on the backend's shape;
+                // count it rather than printing "undefined of N free".
+                typeof b.freeCount === "number"
+                  ? b.freeCount
+                  : b.players.filter((p) => p.free).length
+              } of ${b.players.length} free`
+            : ""
+        }</span></div>
+      ${whyHtml()}
+      <div class="ko-list" id="ko-roster">${rosterHtml()}</div>`;
   }
 
   function whyHtml() {
@@ -342,14 +358,15 @@
       .join("");
   }
 
-  function guestsHtml() {
+  function guestsHtml(n) {
     const b = state.board;
     const you = state.you;
-    const others = b.blockAll ? b.players.filter((p) => p.email !== state.primary) : [];
+    const others =
+      b.blockAll && needsPoc() ? b.players.filter((p) => p.email !== state.primary) : [];
     const total = guestEmails().length;
 
     return `
-      <div class="ko-step"><span class="ko-n">4</span><h2>Who else joins</h2>
+      <div class="ko-step"><span class="ko-n">${n}</span><h2>Who else joins</h2>
         <span class="ko-sub" id="ko-guest-count">${total ? total + " on the invite" : ""}</span></div>
       <div class="ko-cap"><span>From Enout</span>
         <button class="ko-link" id="ko-rev-all">${everyOn() ? "Clear all" : "Add all"}</button></div>
@@ -468,7 +485,7 @@
 
   // Six fields, nothing else. Company and contact are resolved from the
   // record rather than asked for, so they're shown, not typed.
-  function dealHtml() {
+  function dealHtml(n) {
     buildDealName();
     const pipe = currentPipeline();
     const co = state.assoc && state.assoc.company;
@@ -476,7 +493,7 @@
 
     return `
       <div class="ko-deal-wrap">
-      <div class="ko-step"><span class="ko-n">5</span><h2>Deal</h2>
+      <div class="ko-step"><span class="ko-n">${n}</span><h2>Deal</h2>
         <span class="ko-sub">created on booking</span></div>
       ${
         state.setupError
@@ -545,20 +562,26 @@
   }
 
   function flagHtml() {
+    if (!needsPoc()) return "";
     const p = state.board && state.board.players.find((x) => x.email === state.primary);
     return p && p.warn ? `<div class="ko-flag">${esc(p.warn)}</div>` : "";
   }
 
   function canBook() {
-    return !state.busy && !!state.you && !!state.primary && !!state.board;
+    if (state.busy || !state.you || !state.board) return false;
+    return needsPoc() ? !!state.primary : true;
   }
 
   function actionLine() {
     if (!state.board) return "Checking calendars…";
     if (!state.you) return "Pick your email in step 2";
+    const guests = guestEmails().length;
+    if (!needsPoc()) {
+      return `${esc(state.you.split("@")[0])} leads · ${guests} on the invite`;
+    }
     const p = state.board.players.find((x) => x.email === state.primary);
     if (!p) return "Pick a POC";
-    return `${esc(p.name)} leads · ${guestEmails().length} on the invite`;
+    return `${esc(p.name)} leads · ${guests} on the invite`;
   }
 
   function prettyWhen() {
@@ -584,10 +607,16 @@
     return `
       <div class="ko-done">
         <div class="ko-done-hd"><i></i><h3>Slot blocked</h3></div>
-        <div class="ko-kv"><span>POC</span><span>${esc(r.primary)}</span></div>
-        <div class="ko-kv"><span>Held for</span><span>${
-          r.playersBlocked > 1 ? `all ${r.playersBlocked} players` : esc(r.primary) + " only"
-        }</span></div>
+        ${
+          r.primary
+            ? `<div class="ko-kv"><span>POC</span><span>${esc(r.primary)}</span></div>
+               <div class="ko-kv"><span>Held for</span><span>${
+                 r.playersBlocked > 1
+                   ? `all ${r.playersBlocked} players`
+                   : esc(r.primary) + " only"
+               }</span></div>`
+            : ""
+        }
         <div class="ko-kv"><span>When</span><span>${esc(r.when || "")}</span></div>
         <div class="ko-kv"><span>Invited</span><span>${esc(String(r.guests || ""))}</span></div>
         ${
@@ -885,7 +914,9 @@
     try {
       const res = await KylasOverlay.request("bookMeeting", {
         you: state.you,
-        primaryEmail: state.primary,
+        // A discovery call has no POC, so none is sent. The backend reads
+        // an empty value as "the booker runs this one".
+        primaryEmail: needsPoc() ? state.primary : "",
         localStart: localStart(),
         duration: state.duration,
         title: state.title.trim(),

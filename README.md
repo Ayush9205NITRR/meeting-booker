@@ -192,7 +192,8 @@ and full per-player status before showing the confirm step. Passthrough of
 ### `POST` `{ "action": "bookMeeting", "you": "<booker email>", "primaryEmail": "<POC email>", "localStart": "...", "duration": 30, "title": "...", "company": "...", "callType": "...", "reviewers": [...], "externals": [...], "notes": "..." }` — status: partially confirmed
 `you`, `primaryEmail`, `localStart`, `duration`, `title`, `company`,
 `callType`, `reviewers`, `externals` map 1:1 onto `Code.gs`'s existing
-`bookMeeting(payload)` — that part just works. **Still open, pending
+`bookMeeting(payload)` — that part just works. `primaryEmail` is empty on a
+Discovery call, which books without a POC and holds nobody else's calendar. **Still open, pending
 Kylas.gs**: where deal creation / contact status update / notes attach
 happen. Per the platform requirement these need to happen in this same
 call:
