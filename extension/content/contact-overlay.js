@@ -58,6 +58,9 @@
     // are the ones Kylas holds rather than typed from memory.
     companyContacts: null,
     pickedContacts: {},   // email -> true
+
+    // Goes into the Kylas note attached to the new deal.
+    notes: "",
   };
 
   let refreshTimer = null;
@@ -520,6 +523,9 @@
       <label class="ko-lb">Deal value</label>
       <input type="text" id="ko-deal-value" placeholder="e.g. 250000" value="${esc(state.dealValue)}">
 
+      <label class="ko-lb">Meeting notes <span class="ko-from">saved to the deal in Kylas</span></label>
+      <textarea id="ko-notes" placeholder="Context for whoever takes this call…">${esc(state.notes)}</textarea>
+
       <div class="ko-assoc">
         <div class="ko-kv"><span>Company</span><span>${
           co ? esc(co.name) : '<span class="ko-empty-value">resolving from contact…</span>'
@@ -612,6 +618,7 @@
       state.dealName = e.target.value;
       state.dealNameEdited = true;
     });
+    $("#ko-notes").addEventListener("input", (e) => { state.notes = e.target.value; });
     $("#ko-deal-value").addEventListener("input", (e) => {
       state.dealValue = e.target.value;
       state.dealValueEdited = true;
@@ -872,6 +879,9 @@
         // under, so the invite matches the panel exactly.
         attendees: attendees(),
         ownerEmail: state.assoc && state.assoc.owner ? state.assoc.owner.email : null,
+        // The deal is owned by the POC. Kylas.gs turns this email into a
+        // Kylas user id — without it a deal lands on the API key account.
+        notes: state.notes.trim(),
         // Six fields, exactly. Company and contact go as ids resolved from
         // the record, so the deal lands on the right account without the BD
         // retyping anything the CRM already knows.
@@ -917,6 +927,7 @@
     state.company = "";
     state.companyContacts = null;
     state.pickedContacts = {};
+    state.notes = "";
     state.setupError = "";
     panel.setHeader({
       name: "Book Meeting",

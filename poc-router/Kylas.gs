@@ -221,10 +221,21 @@ function kylasOnBooked_(p) {
   const out = { dealId: null, stageMoved: false, noted: false, errors: [] };
   const deal = (p && p.deal) || {};
 
+  // The overlay knows the POC by email — Google addresses are what the
+  // calendar side works in. Kylas wants its own user id, so translate.
+  let ownerId = p.ownerId || null;
+  if (!ownerId && p.primaryEmail) {
+    try {
+      ownerId = kylasUserIdByEmail_(p.primaryEmail);
+    } catch (err) {
+      out.errors.push('Owner lookup: ' + err.message);
+    }
+  }
+
   try {
     const created = kylasCreateDeal_({
       name: deal.name,
-      ownerId: p.ownerId,
+      ownerId: ownerId,
       pipelineId: deal.pipelineId,
       stageId: deal.stageId,
       companyId: deal.companyId,
@@ -260,6 +271,34 @@ function kylasOnBooked_(p) {
 }
 
 // ============ HELPERS ============
+
+/**
+ * Google email -> Kylas user id, so a deal can be owned by the POC.
+ * Cached: the roster is small and changes rarely, and this runs on
+ * every booking.
+ */
+function kylasUserIdByEmail_(email) {
+  const target = String(email || '').trim().toLowerCase();
+  if (!target) throw new Error('No email to resolve.');
+
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('kylasUsers');
+  let users;
+
+  if (cached) {
+    users = JSON.parse(cached);
+  } else {
+    const raw = kylasFetch_('GET', '/users?page=0&size=200');
+    users = (raw.content || raw.data || []).map(function (u) {
+      return { id: u.id, email: String(u.email || '').toLowerCase() };
+    });
+    cache.put('kylasUsers', JSON.stringify(users), 900);
+  }
+
+  const hit = users.filter(function (u) { return u.email === target; })[0];
+  if (!hit) throw new Error('No Kylas user with email ' + email);
+  return hit.id;
+}
 
 /** "₹ 2,50,000" and "250000" both mean 250000; anything else means none. */
 function kylasNumber_(value) {
