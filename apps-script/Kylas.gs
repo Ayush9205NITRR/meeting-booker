@@ -53,7 +53,7 @@ const KYLAS = {
 // ============ TRANSPORT ============
 
 function kylasKey_() {
-  const key = PropertiesService.getScriptProperties().getProperty('KYLAS_API_KEY');
+  const key = overlaySecret_('KYLAS_API_KEY');
   if (!key) throw new Error('KYLAS_API_KEY is not set in Script Properties.');
   return key;
 }
@@ -350,7 +350,7 @@ function kylasSetup() {
 /** Verifies config and connectivity. Writes nothing. */
 function kylasSelfTest() {
   Logger.log('API key set: ' +
-    (PropertiesService.getScriptProperties().getProperty('KYLAS_API_KEY') ? 'yes' : 'NO'));
+    (overlaySecret_('KYLAS_API_KEY') ? 'yes' : 'NO'));
 
   Object.keys(KYLAS.pipelines).forEach(function (k) {
     const p = KYLAS.pipelines[k];

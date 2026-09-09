@@ -70,6 +70,26 @@ page is unaffected.
 
 ---
 
+## Part 1e — The API keys *(optional, but do it)*
+
+`Kylas.gs` and `Overlay.gs` need a Kylas API key and an Airtable token.
+Either place works:
+
+| Where | When to use it |
+|---|---|
+| **GitHub Secrets** — `KYLAS_API_KEY`, `AIRTABLE_PAT` | You already keep them there. The deploy writes them into the Apps Script project each time it runs, so rotating a key is a secret update plus a re-deploy, and nothing is typed into the editor. |
+| **Script Properties** — same names, in the Apps Script editor | Set once by hand, and the repo never sees them at all. |
+
+GitHub Secrets win where both exist. Note they do **not** cross repos: a
+`KYLAS_API_KEY` in `kylas-airtable-sync` is invisible here, so it has to be
+added to this repo too. Same value, second home.
+
+Two things stop the key reaching git. The generated `Secrets.gs` is in
+`.gitignore`, and the import workflow deletes it out of whatever it pulls —
+so it can't arrive by hand or by import.
+
+---
+
 ## Part 2 — Let Claude make changes from the repo *(optional)*
 
 Add one more secret:

@@ -107,7 +107,9 @@ jobs:
       - name: Merge into apps-script/
         run: |
           mkdir -p apps-script
-          rm -f pulled/Overlay.gs pulled/Kylas.gs
+          # Secrets.gs is generated at deploy time and holds real keys.
+          # Dropping it here is what stops a pull from committing them.
+          rm -f pulled/Overlay.gs pulled/Kylas.gs pulled/Secrets.gs pulled/Secrets.js
           cp -a pulled/. apps-script/
           rm -rf pulled
           echo "--- apps-script/ now holds ---"

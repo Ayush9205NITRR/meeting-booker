@@ -8,3 +8,7 @@ extension/config/secrets.js
 key.pem
 *.pem
 dist/
+
+# Generated at deploy time from GitHub Secrets. Holds real API keys.
+apps-script/Secrets.gs
+apps-script/Secrets.js

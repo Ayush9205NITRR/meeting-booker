@@ -93,6 +93,8 @@ you'd otherwise be waiting on a reply that never comes.
 | `APPS_SCRIPT_DEPLOYMENT_ID` | deploy | Apps Script → Manage deployments |
 | `ANTHROPIC_API_KEY` | `@claude` | console.anthropic.com |
 | `CRX_PRIVATE_KEY` | auto-update | `openssl genrsa -out key.pem 2048` |
+| `KYLAS_API_KEY` | Kylas writes | Optional — Script Properties works instead |
+| `AIRTABLE_PAT` | Airtable reads from the backend | Optional — same |
 
 Import and deploy **skip themselves with a warning** when their secrets are
 missing, so an unconfigured repo doesn't turn every commit red. Release

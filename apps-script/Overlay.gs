@@ -176,13 +176,41 @@ function overlayAddNotes_(p) {
   }
 }
 
+/**
+ * One place every secret is read from, in this order:
+ *
+ *   1. Secrets.gs, written by the deploy workflow from GitHub Secrets. It
+ *      is never committed and never pulled back into the repo — the import
+ *      workflow drops it, and .gitignore blocks it locally.
+ *   2. Script Properties, set by hand in the editor.
+ *
+ * The order means a repo-managed key wins where one exists, and a project
+ * that was set up by hand keeps working untouched.
+ *
+ * `typeof` on an undeclared name is safe in Apps Script — it yields
+ * "undefined" rather than throwing — so this works whether or not the
+ * deploy wrote a Secrets.gs.
+ */
+function overlaySecret_(name) {
+  try {
+    if (typeof OVERLAY_BUILD_SECRETS !== 'undefined' &&
+        OVERLAY_BUILD_SECRETS &&
+        OVERLAY_BUILD_SECRETS[name]) {
+      return OVERLAY_BUILD_SECRETS[name];
+    }
+  } catch (err) {
+    // Fall through to Script Properties.
+  }
+  return PropertiesService.getScriptProperties().getProperty(name);
+}
+
 function overlayJson_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 function overlayCheckToken_(params) {
-  const expected = PropertiesService.getScriptProperties().getProperty('OVERLAY_TOKEN');
+  const expected = overlaySecret_('OVERLAY_TOKEN');
   if (!expected) return;                       // token not in use
   if (params.token !== expected) throw new Error('Bad or missing token.');
 }
@@ -325,7 +353,7 @@ function overlayAirtableAll_(tableName) {
 }
 
 function overlayAirtablePat_() {
-  const pat = PropertiesService.getScriptProperties().getProperty('AIRTABLE_PAT');
+  const pat = overlaySecret_('AIRTABLE_PAT');
   if (!pat) throw new Error('AIRTABLE_PAT is not set in Script Properties.');
   return pat;
 }
@@ -405,7 +433,7 @@ function overlayStringify_(value) {
 // rules. These two endpoints only feed the overlay's dropdowns.
 
 function overlayKylasKey_() {
-  const key = PropertiesService.getScriptProperties().getProperty('KYLAS_API_KEY');
+  const key = overlaySecret_('KYLAS_API_KEY');
   if (!key) throw new Error('KYLAS_API_KEY is not set in Script Properties.');
   return key;
 }
