@@ -310,14 +310,16 @@ async function handleRequest(action, payload) {
     // stage is the one the sync already computed — so this is both fast
     // and the same number the rest of the business sees.
     //
-    // Cached briefly because the complaint was about every refresh, and
-    // Kylas is a page BDs reload constantly. Airtable is refreshed by the
-    // sync on its own schedule, so a couple of minutes stale is not a
-    // thing anyone can notice.
+    // Cached for half an hour, which sounds long until you look at what
+    // feeds it: kylas-airtable-sync writes Company List twice a day, at
+    // 1:30 PM and 6:30 PM IST. Re-fetching every few minutes cannot
+    // produce a different answer — it only makes the BD wait. Half an hour
+    // keeps the queue effectively instant and still picks up a manual sync
+    // well within the working day.
     case "getMyAccounts": {
       const key = "accounts:" + (payload.ownerEmail || "");
       const cached = await chrome.storage.local.get([key, key + ":at"]);
-      const fresh = cached[key] && Date.now() - (cached[key + ":at"] || 0) < 3 * 60 * 1000;
+      const fresh = cached[key] && Date.now() - (cached[key + ":at"] || 0) < 30 * 60 * 1000;
       if (fresh) return { ok: true, source: "cache", accounts: cached[key] };
 
       const remote = queueColumnsFrom(await cachedRemoteConfig());

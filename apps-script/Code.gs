@@ -435,21 +435,30 @@ function bookMeeting(payload) {
     let ev = null, hostedOn = 'primary', note = null;
     function onSelf_() { return Calendar.Events.insert(resource, 'primary', opts); }
 
-    let organiser = primary.email;
-    if (BOOKING_MODE === 'onSelf' || primary.email === acct) {
+    // The organiser is whoever is picked in "Your email" — the BD doing
+    // the booking. It used to be the tentative POC, which meant the person
+    // taking the call owned an invite they hadn't sent, and when writing to
+    // their calendar failed it fell back to the script account silently:
+    // that is how meetings ended up organised by someone who wasn't
+    // involved, with nobody able to manage them.
+    const wants = String(p.you).trim();
+    let organiser = wants;
+
+    if (BOOKING_MODE === 'onSelf' || wants === acct) {
       ev = onSelf_(); hostedOn = 'self'; organiser = acct;
     } else {
       try {
-        ev = Calendar.Events.insert(resource, primary.email, opts);
+        ev = Calendar.Events.insert(resource, wants, opts);
+        hostedOn = 'booker';
       } catch (writeErr) {
-        // Any write failure on their calendar falls back to ours, so the
-        // slot still gets blocked rather than the booking dying. It used
-        // to fall back quietly, which is how meetings ended up organised
-        // by the wrong person with nobody noticing.
+        // Still falls back rather than losing the slot, but says so — and
+        // says what would fix it, because the fix is one calendar share.
         ev = onSelf_(); hostedOn = 'self'; organiser = acct;
-        note = "Organised by " + acct + " rather than " + primary.name +
-               ", because their calendar could not be written to. They can " +
-               "still edit it — ask them to share write access to remove this.";
+        note = 'Organised by ' + acct + ' rather than ' + wants +
+               ", because that calendar couldn't be written to. Everyone " +
+               'invited can still edit the meeting. To have it organised by ' +
+               wants + ', share their calendar with ' + acct +
+               ' with "Make changes to events".';
       }
     }
 
