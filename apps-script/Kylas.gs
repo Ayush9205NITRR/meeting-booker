@@ -318,6 +318,77 @@ function kylasHtml_(text) {
 // ============ SETUP + SELF TEST — run from the editor ============
 
 /** Prints the ids KYLAS needs. Reads only. */
+/**
+ * Run this from the editor when a Kylas endpoint answers 400.
+ *
+ * /pipelines/search returned 400 with an empty body — the endpoint exists
+ * but doesn't like the request shape, and Kylas doesn't say which part.
+ * Rather than change one thing and redeploy to find out, this tries every
+ * plausible shape in a single run and prints what each one answered.
+ *
+ * Reads only. Nothing here creates, updates or deletes anything.
+ */
+function kylasProbePipelines() {
+  const attempts = [
+    ['GET',  '/pipelines', null],
+    ['GET',  '/pipelines?entityType=deal', null],
+    ['GET',  '/pipelines?entityType=DEAL', null],
+    ['GET',  '/pipelines/deal', null],
+    ['GET',  '/deals/pipelines', null],
+    ['GET',  '/pipelines/search', null],
+    ['POST', '/pipelines/search', {}],
+    ['POST', '/pipelines/search?page=0&size=100', { fields: [], jsonRule: {} }],
+    ['POST', '/search/pipeline', { fields: [], jsonRule: {} }],
+    ['GET',  '/layouts/pipelines?entityType=deal', null]
+  ];
+
+  Logger.log('Probing ' + attempts.length + ' shapes. Reads only.');
+  Logger.log('');
+
+  attempts.forEach(function (a) {
+    const method = a[0], path = a[1], payload = a[2];
+    const label = (method + ' ' + path);
+
+    const options = {
+      method: method.toLowerCase(),
+      headers: { 'api-key': kylasKey_(), Accept: 'application/json' },
+      muteHttpExceptions: true
+    };
+    if (payload) {
+      options.contentType = 'application/json';
+      options.payload = JSON.stringify(payload);
+    }
+
+    let code, body;
+    try {
+      const res = UrlFetchApp.fetch(KYLAS.base + path, options);
+      code = res.getResponseCode();
+      body = res.getContentText() || '';
+    } catch (err) {
+      Logger.log(pad_(label, 46) + ' threw: ' + err.message);
+      return;
+    }
+
+    // A 200 is only useful if it actually carried pipelines, so say how many
+    // and name the first one — that is what tells a working endpoint from
+    // one that answers 200 with nothing.
+    let summary = body.slice(0, 160).replace(/\s+/g, ' ');
+    if (code >= 200 && code < 300) {
+      try {
+        const parsed = JSON.parse(body);
+        const list = parsed.content || parsed.data || (Array.isArray(parsed) ? parsed : []);
+        summary = list.length + ' item(s)' +
+          (list.length && list[0] ? ' — first: ' + (list[0].name || list[0].id) : '');
+      } catch (e) { /* keep the raw snippet */ }
+    }
+
+    Logger.log(pad_(label, 46) + ' ' + code + '  ' + summary);
+  });
+
+  Logger.log('');
+  Logger.log('Send this whole log back. The line with a 2xx and a non-zero count is the one to use.');
+}
+
 function kylasSetup() {
   Logger.log('Deal pipelines');
   try {
