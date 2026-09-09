@@ -78,6 +78,27 @@ jobs:
       # error for that ("Could not read API credentials") points at the
       # token rather than at the stray line. Trimming here costs nothing and
       # removes the single most likely way this step fails.
+      # ANYONE_ANONYMOUS means the /exec URL answers anybody who has it,
+      # and this endpoint books meetings, creates deals and moves contact
+      # stages. OVERLAY_TOKEN is what stands in for the domain check that
+      # was removed, so deploying that combination without one would leave
+      # it genuinely open. Refuse instead — the failure is recoverable, an
+      # open endpoint that nobody notices is not.
+      - name: Refuse an open web app with no token
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          OVERLAY_TOKEN: ${{ secrets.OVERLAY_TOKEN }}
+        run: |
+          ACCESS=$(node -p "require('./apps-script/appsscript.json').webapp.access")
+          echo "Web app access: $ACCESS"
+          if [ "$ACCESS" = "ANYONE_ANONYMOUS" ] && [ -z "$OVERLAY_TOKEN" ]; then
+            echo "::error::appsscript.json sets access ANYONE_ANONYMOUS but no OVERLAY_TOKEN secret exists. Set one first: gh secret set OVERLAY_TOKEN --repo ${{ github.repository }} --body \"\$(openssl rand -hex 24)\""
+            exit 1
+          fi
+          if [ "$ACCESS" = "ANYONE_ANONYMOUS" ]; then
+            echo "Token is set — the open web app is guarded."
+          fi
+
       - name: Write clasp credentials
         if: steps.secrets.outputs.ready == 'true'
         env:
