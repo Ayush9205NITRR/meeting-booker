@@ -264,7 +264,31 @@ async function handleRequest(action, payload) {
     // backend they return empty rather than mock data — a fake pipeline id
     // would create a deal in the wrong place the moment one is configured.
     case "getDealPipelines": {
+      // Pipelines change about never, and asking again on every contact is
+      // a full Apps Script round trip the BD waits through. Cached here as
+      // well as on the server, because it's the round trip that costs, not
+      // the work at the other end.
+      const cached = await chrome.storage.local.get(["dealPipelines", "dealPipelinesAt"]);
+      const fresh =
+        cached.dealPipelines &&
+        Date.now() - (cached.dealPipelinesAt || 0) < 10 * 60 * 1000;
+      if (fresh) return { ok: true, pipelines: cached.dealPipelines, cached: true };
+
       const result = await callBackend({ action: "dealPipelines" });
+      if (result && result.ok && (result.pipelines || []).length) {
+        await chrome.storage.local.set({
+          dealPipelines: result.pipelines,
+          dealPipelinesAt: Date.now(),
+        });
+        return result;
+      }
+
+      // An empty or failed answer must not overwrite a good cached list —
+      // a momentary backend blip would otherwise empty the dropdown for
+      // the next ten minutes.
+      if (cached.dealPipelines) {
+        return { ok: true, pipelines: cached.dealPipelines, cached: true, stale: true };
+      }
       return result || { ok: true, pipelines: [] };
     }
     case "getContact": {

@@ -29,12 +29,35 @@ KylasOverlay.watchRecordId = function watchRecordId(pattern, onEnter, onLeave) {
   setInterval(tick, 500);
 };
 
+// How long to wait before deciding the backend isn't coming. Apps Script
+// can cold-start, so this is generous — but not unbounded, because a panel
+// showing skeletons forever tells the BD nothing and can't be retried.
+KylasOverlay.REQUEST_TIMEOUT_MS = 25000;
+
 KylasOverlay.request = function request(action, payload) {
-  return chrome.runtime.sendMessage({
+  const call = chrome.runtime.sendMessage({
     type: "KYLAS_OVERLAY_REQUEST",
     action,
     payload,
   });
+
+  return Promise.race([
+    call,
+    new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            ok: false,
+            timedOut: true,
+            error:
+              "The POC Router didn't answer within " +
+              Math.round(KylasOverlay.REQUEST_TIMEOUT_MS / 1000) +
+              "s. It may be waking up — try again in a moment.",
+          }),
+        KylasOverlay.REQUEST_TIMEOUT_MS
+      )
+    ),
+  ]);
 };
 
 KylasOverlay.escapeHtml = function escapeHtml(str) {

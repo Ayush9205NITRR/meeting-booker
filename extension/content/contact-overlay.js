@@ -793,39 +793,52 @@
   async function loadDealSetup() {
     const problems = [];
 
-    if (!state.pipelines) {
-      try {
-        const res = await KylasOverlay.request("getDealPipelines", {});
-        state.pipelines = (res && res.pipelines) || [];
-        if (state.pipelines.length) applyPipelineDefault();
-        else problems.push("No deal pipelines returned");
-      } catch (e) {
+    // Both at once. They don't depend on each other, and each is a round
+    // trip to Apps Script — which redirects, and may cold-start — so doing
+    // them in sequence doubled the wait for no reason. This is the single
+    // biggest reason the panel used to sit on skeletons.
+    const [pipelinesRes, contactRes] = await Promise.all([
+      state.pipelines
+        ? Promise.resolve(null)
+        : KylasOverlay.request("getDealPipelines", {}).catch(() => ({ failed: true })),
+      KylasOverlay.request("getContact", { contactId: state.contactId }).catch(() => ({ failed: true })),
+    ]);
+
+    if (pipelinesRes) {
+      if (pipelinesRes.failed) {
         state.pipelines = [];
         problems.push("Pipelines failed to load");
+      } else {
+        state.pipelines = pipelinesRes.pipelines || [];
+        if (state.pipelines.length) applyPipelineDefault();
+        else problems.push("No deal pipelines returned");
       }
     }
 
-    try {
-      const res = await KylasOverlay.request("getContact", { contactId: state.contactId });
-      if (res && res.ok) {
-        state.assoc = res;
-        // Company name flows into both the invite title and the deal.
-        if (res.company && res.company.name && !state.company.trim()) {
-          state.company = res.company.name;
-        }
-        if (res.company && res.company.dealValue && !state.dealValueEdited) {
-          state.dealValue = String(res.company.dealValue);
-        }
-        buildTitle();
-        buildDealName();
-        if (res.company && res.company.id) loadCompanyContacts(res.company.id);
-        else state.companyContacts = [];
+    const res = contactRes;
+    if (res && res.ok) {
+      state.assoc = res;
+      // Company name flows into both the invite title and the deal.
+      if (res.company && res.company.name && !state.company.trim()) {
+        state.company = res.company.name;
+      }
+      if (res.company && res.company.dealValue && !state.dealValueEdited) {
+        state.dealValue = String(res.company.dealValue);
+      }
+      buildTitle();
+      buildDealName();
+
+      // The backend sends these with the contact now. Asking separately is
+      // the fallback for a backend that hasn't been redeployed yet.
+      if (Array.isArray(res.companyContacts)) {
+        state.companyContacts = res.companyContacts;
+      } else if (res.company && res.company.id) {
+        loadCompanyContacts(res.company.id);
       } else {
-        problems.push((res && res.error) || "Contact lookup failed");
         state.companyContacts = [];
       }
-    } catch (e) {
-      problems.push("Contact lookup failed");
+    } else {
+      problems.push((res && res.error) || "Contact lookup failed");
       state.companyContacts = [];
     }
 

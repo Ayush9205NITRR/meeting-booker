@@ -538,6 +538,21 @@ function overlayContact_(contactId) {
     }
   }
 
+  // The company's other contacts ride along rather than costing a second
+  // round trip. The overlay used to ask for them separately, and every
+  // Apps Script call is a redirect plus a cold-start risk — the round trip
+  // dominates, not the work inside it. The server already knows the
+  // company id by this point, so answering it here is free.
+  let companyContacts = [];
+  if (company && company.id) {
+    try {
+      const listed = overlayCompanyContacts_(company.id);
+      companyContacts = (listed && listed.contacts) || [];
+    } catch (e) {
+      /* the overlay falls back to asking separately */
+    }
+  }
+
   return {
     ok: true,
     contact: {
@@ -546,7 +561,8 @@ function overlayContact_(contactId) {
       email: overlayPrimaryEmail_(c)
     },
     owner: overlayOwner_(c.ownedBy),
-    company: company
+    company: company,
+    companyContacts: companyContacts
   };
 }
 
