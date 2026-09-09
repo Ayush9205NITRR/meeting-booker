@@ -77,11 +77,34 @@ const BOOKING_MODE = 'auto';
 // ============ 2. ENTRY POINT ============
 
 function doGet(e) {
+  const params = (e && e.parameter) || {};
+
   // The Chrome overlay calls this same web app with ?action=..., so route
-  // those to the JSON API. With no action param the behaviour is exactly
-  // what it was: the POC Router page, unchanged.
-  const action = e && e.parameter && e.parameter.action;
-  if (action) return overlayApi_(e);
+  // those to the JSON API, which checks the token itself.
+  if (params.action) return overlayApi_(e);
+
+  // The page is gated on the same token.
+  //
+  // This deployment is ANYONE_ANONYMOUS, because a domain check cannot
+  // work for the extension: a browser will not send Google's session
+  // cookie on a cross-site request from a service worker. Anonymous
+  // access is what makes the extension possible — but it also means that
+  // without this check, anyone holding the /exec URL could open the POC
+  // Router page and book meetings through it, since the page reaches
+  // bookMeeting over google.script.run rather than through the API the
+  // token guards.
+  //
+  // So the token protects both doors, not just one.
+  const expected = overlaySecret_('OVERLAY_TOKEN');
+  if (expected && params.token !== expected) {
+    return HtmlService.createHtmlOutput(
+      '<div style="font:16px/1.6 system-ui;max-width:34rem;margin:4rem auto;padding:0 1rem">' +
+      '<h2 style="margin:0 0 .5rem">POC Router</h2>' +
+      '<p>This link needs its access token. Use the bookmarked URL — the one ' +
+      'ending in <code>?token=…</code> — rather than the bare /exec address.</p>' +
+      '<p style="color:#6b7280">Ask Ayush if you need it again.</p></div>'
+    ).setTitle('POC Router');
+  }
 
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('POC Router')
