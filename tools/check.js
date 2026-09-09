@@ -112,5 +112,56 @@ const war = (manifest.web_accessible_resources || []).flatMap((w) => w.resources
 if (war.includes('styles/overlay.css')) ok('overlay.css is web-accessible');
 else bad('styles/overlay.css missing from web_accessible_resources — the panel renders unstyled');
 
+// ---------- workflows ----------
+// A step that reads $CLASPRC_JSON but doesn't declare it in its own `env:`
+// gets an empty string, not an error — GitHub only exposes a secret to the
+// step that asks for it. That reads exactly like a missing secret, and the
+// only way to find out is a failed run, so it's worth catching here.
+console.log('\nWorkflows');
+
+const wfDir = path.join(root, '.github', 'workflows');
+const workflows = fs.readdirSync(wfDir).filter((f) => f.endsWith('.yml')).sort();
+
+let stepsChecked = 0;
+for (const file of workflows) {
+  const text = read('.github/workflows/' + file);
+
+  // Steps start at a known indent in these files, so splitting on that is
+  // enough without pulling in a YAML parser.
+  const blocks = text.split(/\n(?=      - (?:name|uses):)/).slice(1);
+
+  for (const block of blocks) {
+    stepsChecked++;
+    const name = (block.match(/- name: (.+)/) || [, block.match(/- uses: (.+)/)?.[1] || '?'])[1].trim();
+
+    // Only the step's own env block, which ends at the next key at the
+    // same indent (run:, with:, if:, ...).
+    const envBlock = block.match(/\n        env:\n((?:\s{10,}\S.*\n)+)/);
+    const declared = new Set(
+      envBlock ? [...envBlock[1].matchAll(/^\s+([A-Z_][A-Z0-9_]*):/gm)].map((m) => m[1]) : []
+    );
+
+    const runBlock = block.match(/\n        run: \|\n([\s\S]*?)(?=\n      - |\n  [a-z]|$)/);
+    if (!runBlock) continue;
+
+    // Shell and Node both, since these steps pass secrets into node -e.
+    const used = new Set([
+      ...[...runBlock[1].matchAll(/\$\{?([A-Z_][A-Z0-9_]{2,})\}?/g)].map((m) => m[1]),
+      ...[...runBlock[1].matchAll(/process\.env\.([A-Z_][A-Z0-9_]*)/g)].map((m) => m[1]),
+    ]);
+
+    // Set by the runner or by an earlier line in the same script.
+    const provided = /^(GITHUB_[A-Z_]+|RUNNER_[A-Z_]+|HOME|PATH|PWD|CI)$/;
+
+    for (const v of used) {
+      if (provided.test(v)) continue;
+      if (declared.has(v)) continue;
+      if (new RegExp('^\\s*(export\\s+)?' + v + '=', 'm').test(runBlock[1])) continue;
+      bad(file + ' -> "' + name + '" reads $' + v + ' but does not declare it in env: (it will be empty)');
+    }
+  }
+}
+ok(stepsChecked + ' workflow steps checked for undeclared env vars');
+
 console.log('\n' + (failed ? failed + ' check(s) failed\n' : 'All checks passed\n'));
 process.exit(failed ? 1 : 0);

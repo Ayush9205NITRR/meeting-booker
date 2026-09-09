@@ -27,6 +27,7 @@ jobs:
 
       - name: Check secrets
         env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
