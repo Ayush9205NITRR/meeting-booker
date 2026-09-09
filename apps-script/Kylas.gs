@@ -385,8 +385,30 @@ function kylasProbePipelines() {
     Logger.log(pad_(label, 46) + ' ' + code + '  ' + summary);
   });
 
+  // A probe that only reports which call works still leaves you one run
+  // short of the ids you actually need. Now that the endpoint is settled,
+  // it finishes the job: same listing kylasSetup() prints, so whichever of
+  // the two you run, you get the pipeline and stage ids.
   Logger.log('');
-  Logger.log('Send this whole log back. The line with a 2xx and a non-zero count is the one to use.');
+  Logger.log('Deal pipelines, resolved');
+  try {
+    const list = overlayDealPipelinesFresh_();
+    if (!list.length) {
+      Logger.log('  none came back — check the API key has access to deals');
+    }
+    list.forEach(function (p) {
+      Logger.log('  [' + p.id + '] ' + p.name);
+      if (!p.stages.length) Logger.log('       (no stages — a deal cannot be created here)');
+      p.stages.forEach(function (s, i) {
+        Logger.log('       ' + (i === 0 ? '(first) ' : '        ') + '[' + s.id + '] ' + s.name);
+      });
+    });
+  } catch (err) {
+    Logger.log('  FAILED: ' + err.message);
+  }
+
+  Logger.log('');
+  Logger.log('Send this whole log back — the ids under "Deal pipelines, resolved" are what go into KYLAS.pipelines.');
 }
 
 function kylasSetup() {
