@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F7F7F4; --card:#FFF; --ink:#17181C; --ink-2:#5E636E; --ink-3:#9AA0AB;
+    --rule:#E5E5E0; --fill:#F1F1ED;
+    --free:#0F6B45; --tight:#96590A; --busy:#A82A20; --none:#8A8F98;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:'Instrument Sans',system-ui,sans-serif;font-size:15px;line-height:1.5;
+    padding-bottom:100px}
+  .wrap{max-width:480px;margin:0 auto;padding:0 18px}
+
+  header{background:var(--paper);border-bottom:1px solid var(--rule);padding:16px 0 14px}
+  .mast{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+  .mast h1{margin:0;font-size:16px;font-weight:700;letter-spacing:-.15px}
+  .live{font-family:'Martian Mono',monospace;font-size:10px;color:var(--ink-3);
+    display:flex;align-items:center;gap:6px}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--free)}
+
+  .row2{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:7px}
+  .tf{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:7px 10px}
+  .tf:focus-within{border-color:var(--ink)}
+  .tf span{display:block;font-size:10px;color:var(--ink-3);margin-bottom:2px}
+  .tf input,.tf select{width:100%;border:0;background:none;padding:0;color:var(--ink);
+    font-family:'Martian Mono',monospace;font-size:14.5px;font-weight:500;min-height:23px}
+  .tf input:focus,.tf select:focus{outline:0}
+  .stamp{margin-top:8px;font-size:12px;color:var(--ink-3)}
+
+  .note{display:flex;gap:9px;padding:11px 13px;border-radius:10px;font-size:13px;
+    background:var(--card);border:1px solid var(--rule);margin-top:12px;line-height:1.45}
+  .note .b{width:3px;border-radius:2px;flex:0 0 auto}
+  .note.warn .b{background:var(--tight)} .note.bad .b{background:var(--busy)}
+  .note b{font-weight:600}
+
+  .step{display:flex;align-items:center;gap:9px;margin:22px 0 9px}
+  .step .n{width:19px;height:19px;border-radius:50%;background:var(--ink);color:#fff;
+    font-family:'Martian Mono',monospace;font-size:9.5px;
+    display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .step h2{margin:0;font-size:14px;font-weight:600;letter-spacing:-.1px}
+  .step .sub{font-size:12.5px;color:var(--ink-3);margin-left:auto}
+
+  .panel{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:14px}
+  .seg{display:inline-flex;background:var(--fill);border-radius:8px;padding:3px;margin-bottom:12px}
+  .seg button{background:none;border:0;border-radius:6px;padding:7px 13px;font-family:inherit;
+    font-size:13px;color:var(--ink-2);cursor:pointer}
+  .seg button.on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.07)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .lb{display:block;font-size:12px;font-weight:500;color:var(--ink-2);margin-bottom:5px}
+  input[type=text],input[type=email],select.big{width:100%;background:var(--fill);
+    border:1px solid transparent;border-radius:9px;padding:10px 12px;font-family:inherit;
+    font-size:15px;color:var(--ink);min-height:42px}
+  input::placeholder{color:var(--ink-3)}
+  input:focus,select.big:focus{outline:0;background:var(--card);border-color:var(--ink)}
+  select.big{-webkit-appearance:none;appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),
+                     linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
+    background-position:calc(100% - 17px) 19px,calc(100% - 12px) 19px;
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+  select.big.unset{color:var(--ink-3)}
+  .prev{margin-top:12px;padding-top:11px;border-top:1px solid var(--rule)}
+  .prev .t{font-family:'Martian Mono',monospace;font-size:12px;color:var(--ink-2);
+    line-height:1.5;word-break:break-word}
+  .lnk{background:none;border:0;padding:0;font-family:inherit;font-size:12.5px;color:var(--ink-2);
+    text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+  .prev .lnk{margin-top:6px;display:inline-block}
+
+  .why{font-size:12.5px;color:var(--ink-2);margin:0 0 9px;line-height:1.45}
+  .why b{color:var(--ink);font-weight:600}
+  .list{background:var(--card);border:1px solid var(--rule);border-radius:12px;overflow:hidden}
+  .p{display:flex;align-items:center;gap:11px;padding:11px 13px;cursor:pointer;
+     border-top:1px solid var(--rule)}
+  .p:first-child{border-top:0}
+  .p:hover{background:var(--fill)}
+  .p.sel{background:var(--ink);color:#fff}
+  .p.sel:hover{background:var(--ink)}
+  .av{width:31px;height:31px;border-radius:50%;background:var(--fill);color:var(--ink-2);
+    font-family:'Martian Mono',monospace;font-size:10.5px;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center}
+  .p.sel .av{background:rgba(255,255,255,.16);color:#fff}
+  .who{flex:1;min-width:0}
+  .n2{display:block;font-size:15px;font-weight:600;letter-spacing:-.1px;line-height:1.25}
+  .l2{display:block;font-size:12px;color:var(--ink-3);line-height:1.35;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .p.sel .l2{color:rgba(255,255,255,.62)}
+  .rt{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto}
+  .tag{font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.04em;
+    padding:3px 7px;border-radius:5px;background:var(--fill)}
+  .t-FREE{color:var(--free)} .t-TIGHT{color:var(--tight)}
+  .t-BUSY{color:var(--busy)} .t-NOACCESS{color:var(--none)}
+  .p.sel .tag{background:rgba(255,255,255,.14)}
+  .p.sel .t-FREE{color:#7FE0AF} .p.sel .t-TIGHT{color:#F2C67A}
+  .p.sel .t-BUSY{color:#F5A099} .p.sel .t-NOACCESS{color:#B9BEC7}
+  .poc{font-family:'Martian Mono',monospace;font-size:8.5px;letter-spacing:.05em;
+    background:#fff;color:var(--ink);padding:3px 6px;border-radius:4px}
+  .rank{font-family:'Martian Mono',monospace;font-size:9px;color:var(--ink-3)}
+  .p.sel .rank{color:rgba(255,255,255,.5)}
+
+  .opt{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+    background:none;border:0;border-top:1px solid var(--rule);padding:12px 14px;
+    text-align:left;cursor:pointer;color:var(--ink);font-family:inherit}
+  .opt:first-child{border-top:0}
+  .opt:hover{background:var(--fill)}
+  .opt .t{font-family:'Martian Mono',monospace;font-size:12.5px}
+  .opt .w{font-size:12px;color:var(--ink-2);text-align:right}
+
+  .cap{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .cap .t{font-size:12.5px;font-weight:600}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tg{display:flex;align-items:center;gap:6px;background:var(--fill);border:1px solid transparent;
+    border-radius:100px;padding:7px 12px 7px 10px;font-size:13px;color:var(--ink-2);cursor:pointer}
+  .tg.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .tg .tk{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--ink-3);flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;font-size:8px;color:transparent}
+  .tg.on .tk{background:#fff;border-color:#fff;color:var(--ink)}
+  .fixed{display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;
+    border-radius:100px;padding:7px 12px 7px 10px;font-size:13px}
+  .fixed .tk{width:13px;height:13px;border-radius:50%;background:#fff;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;font-size:8px;flex:0 0 auto}
+  .split{margin-top:14px;padding-top:13px;border-top:1px solid var(--rule)}
+  .hint{font-size:12px;color:var(--ink-3);margin:-2px 0 8px;line-height:1.45}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .chip{display:flex;align-items:center;gap:7px;background:var(--fill);border-radius:8px;
+    padding:6px 8px 6px 10px;font-size:12.5px;font-family:'Martian Mono',monospace}
+  .chip.bad{background:#FBEAE8;color:var(--busy)}
+  .chip button{background:none;border:0;padding:0;font-size:15px;line-height:1;color:var(--ink-3);cursor:pointer}
+
+  .actbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(247,247,244,.94);
+    backdrop-filter:blur(12px);border-top:1px solid var(--rule);
+    padding:10px 0 max(10px,env(safe-area-inset-bottom))}
+  .flag{font-size:12px;color:var(--busy);margin-bottom:7px;display:none;line-height:1.4}
+  .actin{display:flex;align-items:center;gap:12px}
+  .actwho{flex:1;min-width:0}
+  .actwho .a{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .actwho .b{font-family:'Martian Mono',monospace;font-size:10.5px;color:var(--ink-3)}
+  .go{flex:0 0 auto;background:var(--ink);color:#fff;border:0;border-radius:10px;padding:0 22px;
+    height:47px;font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer}
+  .go:disabled{background:var(--rule);color:var(--ink-3);cursor:not-allowed}
+
+  .done{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:15px;margin-top:16px}
+  .done .hd{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+  .done .hd i{width:3px;height:17px;border-radius:2px;background:var(--free);display:block}
+  .done h3{margin:0;font-size:15px;font-weight:600}
+  .kv{display:flex;gap:12px;font-size:13px;padding:3px 0}
+  .kv .k{color:var(--ink-3);flex:0 0 70px;font-size:12px;padding-top:1px}
+  .kv.flagged span:last-child{color:var(--busy)}
+  .links{margin-top:11px;padding-top:11px;border-top:1px solid var(--rule);
+    display:flex;flex-direction:column;gap:7px}
+  .links a{color:var(--ink);font-size:13px;text-decoration:none;font-weight:500}
+  .links a::after{content:' →';color:var(--ink-3)}
+
+  .skel{height:54px;border-bottom:1px solid var(--rule);
+    background:linear-gradient(90deg,var(--card) 0%,var(--fill) 50%,var(--card) 100%);
+    background-size:200% 100%;animation:sh 1.3s linear infinite}
+  .skel:last-child{border-bottom:0}
+  @keyframes sh{to{background-position:-200% 0}}
+  @media (prefers-reduced-motion:reduce){.skel{animation:none;background:var(--fill)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="mast">
+      <h1>POC Router</h1>
+      <span class="live"><span class="dot" id="dot"></span><span id="clock">—</span></span>
+    </div>
+    <div class="row2">
+      <label class="tf"><span>Date</span><input type="date" id="date"></label>
+      <label class="tf"><span>Start time</span><input type="time" id="time" step="300"></label>
+      <label class="tf"><span>Duration</span>
+        <select id="dur">
+          <option value="15">15 min</option>
+          <option value="30" selected>30 min</option>
+          <option value="45">45 min</option>
+          <option value="60">60 min</option>
+          <option value="90">90 min</option>
+        </select></label>
+    </div>
+    <div class="stamp" id="stamp">—</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="notices"></div>
+
+  <div class="step"><span class="n">1</span><h2>Name the invite</h2></div>
+  <div class="panel">
+    <div class="seg">
+      <button id="tReq" class="on">Active requirement</button>
+      <button id="tDisc">Discovery</button>
+    </div>
+    <div class="two">
+      <div><label class="lb" for="company">Company</label>
+        <input type="text" id="company" placeholder="Acme Pvt Ltd" autocomplete="off"></div>
+      <div><label class="lb" for="extra" id="extraLbl">Event type</label>
+        <input type="text" id="extra" placeholder="Offsite" autocomplete="off"></div>
+    </div>
+    <div class="prev">
+      <div class="t" id="titleView">—</div>
+      <input type="text" id="title" style="display:none;margin-top:6px">
+      <button class="lnk" id="editTitle">Edit</button>
+    </div>
+  </div>
+
+  <div class="step"><span class="n">2</span><h2>Your email</h2>
+    <span class="sub">goes on the invite</span></div>
+  <div class="panel">
+    <select class="big unset" id="you"><option value="">Choose your email…</option></select>
+  </div>
+
+  <div class="step"><span class="n">3</span><h2>Tentative POC</h2>
+    <span class="sub" id="freeCount"></span></div>
+  <p class="why" id="why"></p>
+  <p class="hint" style="margin:-4px 0 9px">The slot gets held on every player's calendar. The POC is who leads it.</p>
+  <div class="list" id="roster">
+    <div class="skel"></div><div class="skel"></div><div class="skel"></div>
+    <div class="skel"></div><div class="skel"></div>
+  </div>
+  <div id="nextwrap"></div>
+
+  <div id="rest" style="display:none">
+    <div class="step"><span class="n">4</span><h2>Who else joins</h2>
+      <span class="sub" id="guestCount"></span></div>
+    <div class="panel">
+      <div class="cap"><span class="t">From Enout</span>
+        <button class="lnk" id="revAll">Add all</button></div>
+      <div class="tags" id="revs"></div>
+      <p class="hint" id="autoAdd" style="margin:9px 0 0;display:none"></p>
+      <div class="split">
+        <div class="cap"><span class="t">Client side</span></div>
+        <p class="hint">Type an email, press Enter. Add as many as you need.</p>
+        <div class="chips" id="extChips"></div>
+        <input type="email" id="extInput" placeholder="name@company.com"
+               autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+    </div>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<div class="actbar">
+  <div class="wrap">
+    <div class="flag" id="flag"></div>
+    <div class="actin">
+      <div class="actwho">
+        <div class="a" id="actA">Checking calendars…</div>
+        <div class="b" id="actB">—</div>
+      </div>
+      <button class="go" id="go" disabled>Block</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  var board=null, primary=null, busy=false, timer=null;
+  var revSel={}, externals=[];
+
+  function $(i){ return document.getElementById(i); }
+  function pad(n){ return n<10?'0'+n:''+n; }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function okEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e).trim()); }
+  function dur(){ return Number($('dur').value)||30; }
+  function remember(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+  function recall(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+
+  var DW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function ymd(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function localStart(){ return $('date').value+'T'+$('time').value; }
+  function round5(d){ d.setSeconds(0,0); d.setMinutes(Math.ceil(d.getMinutes()/5)*5); return d; }
+
+  $('date').onchange=load;
+  $('time').onchange=load;
+  $('dur').onchange=load;
+
+  (function(){
+    var n=round5(new Date());
+    $('date').value=ymd(n);
+    $('time').value=pad(n.getHours())+':'+pad(n.getMinutes());
+  })();
+
+  function pretty(){
+    var d=new Date(localStart().replace('T',' ').replace(/-/g,'/'));
+    if (isNaN(d)) return localStart();
+    var h=d.getHours(), ap=h>=12?'pm':'am';
+    var t=new Date(); t.setHours(0,0,0,0);
+    var day=new Date(d); day.setHours(0,0,0,0);
+    var diff=Math.round((day-t)/86400000);
+    var lbl=diff===0?'Today':diff===1?'Tomorrow':DW[d.getDay()]+' '+d.getDate()+' '+MN[d.getMonth()];
+    return lbl+', '+(h%12||12)+':'+pad(d.getMinutes())+' '+ap;
+  }
+  function endLabel(){
+    var d=new Date(localStart().replace('T',' ').replace(/-/g,'/'));
+    if (isNaN(d)) return '';
+    var e=new Date(d.getTime()+dur()*60000), h=e.getHours();
+    return (h%12||12)+':'+pad(e.getMinutes())+' '+(h>=12?'pm':'am');
+  }
+
+  // ── 1. title ──
+  var callType='Requirement', edited=false;
+  $('tReq').onclick =function(){ setType('Requirement'); };
+  $('tDisc').onclick=function(){ setType('Discovery'); };
+  function setType(t){
+    callType=t;
+    $('tReq').className  = t==='Requirement'?'on':'';
+    $('tDisc').className = t==='Discovery'?'on':'';
+    $('extraLbl').textContent = t==='Requirement'?'Event type':'Last event';
+    $('extra').placeholder    = t==='Requirement'?'Offsite':'Annual Offsite 2025';
+    buildTitle();
+  }
+  $('editTitle').onclick=function(){
+    if ($('title').style.display==='none'){
+      $('title').style.display='block'; $('titleView').style.display='none';
+      $('editTitle').textContent='Use generated'; edited=true; $('title').focus();
+    } else {
+      $('title').style.display='none'; $('titleView').style.display='block';
+      $('editTitle').textContent='Edit'; edited=false; buildTitle();
+    }
+  };
+  $('company').oninput=buildTitle;
+  $('extra').oninput=buildTitle;
+  function buildTitle(){
+    if (edited) return;
+    var c=$('company').value.trim()||'[Company]';
+    var x=$('extra').value.trim();
+    var q=board&&board.quarter?board.quarter:'';
+    $('title').value = callType==='Requirement'
+      ? c+' <> Enout: '+(x||'[Event type]')+(q?' | '+q:'')
+      : c+' <> Enout | '+(x||'[Last event]');
+    $('titleView').textContent=$('title').value;
+  }
+
+  // ── 2. you ──
+  $('you').onchange=function(){
+    $('you').classList.toggle('unset',!$('you').value);
+    if ($('you').value) remember('pocYou',$('you').value);
+    drawRevs(); updateAct();
+  };
+  function fillYou(list){
+    var saved=recall('pocYou');
+    $('you').innerHTML='<option value="">Choose your email…</option>'+
+      list.map(function(e){ return '<option value="'+esc(e)+'"'+(e===saved?' selected':'')+'>'+esc(e)+'</option>'; }).join('');
+    $('you').classList.toggle('unset',!$('you').value);
+  }
+
+  // ── 4. reviewers ──
+  function drawAutoAdd(){
+    if (!board || !board.blockAll){ $('autoAdd').style.display='none'; return; }
+    var others=board.players.filter(function(x){ return x.email!==primary; });
+    if (!others.length){ $('autoAdd').style.display='none'; return; }
+    $('autoAdd').textContent='Plus every player — '+
+      others.map(function(x){ return x.name; }).join(', ')+
+      ' — so the slot is held on their calendars too.';
+    $('autoAdd').style.display='block';
+  }
+  function drawRevs(){
+    if (!board) return;
+    var you=$('you').value;
+    var html = you ? '<span class="fixed"><span class="tk">✓</span>'+esc(you.split('@')[0])+' (you)</span>' : '';
+    html += board.reviewers.map(function(r){
+      if (!(r.email in revSel)) revSel[r.email]=!!r.default;
+      return '<button class="tg'+(revSel[r.email]?' on':'')+'" data-e="'+esc(r.email)+'">'+
+        '<span class="tk">✓</span>'+esc(r.name)+'</button>';
+    }).join('');
+    $('revs').innerHTML=html;
+
+    drawAutoAdd();
+    document.querySelectorAll('.tg').forEach(function(b){
+      b.onclick=function(){
+        var e=b.getAttribute('data-e');
+        revSel[e]=!revSel[e]; b.classList.toggle('on',revSel[e]);
+        syncAll(); updateAct();
+      };
+    });
+    syncAll();
+  }
+  function everyOn(){ return board && board.reviewers.every(function(r){ return revSel[r.email]; }); }
+  function syncAll(){ $('revAll').textContent=everyOn()?'Clear all':'Add all'; }
+  $('revAll').onclick=function(){
+    if (!board) return;
+    var on=!everyOn();
+    board.reviewers.forEach(function(r){ revSel[r.email]=on; });
+    drawRevs(); updateAct();
+  };
+
+  // ── client ──
+  function drawExt(){
+    $('extChips').innerHTML=externals.map(function(e,i){
+      return '<span class="chip'+(okEmail(e)?'':' bad')+'">'+esc(e)+'<button data-i="'+i+'">×</button></span>';
+    }).join('');
+    document.querySelectorAll('#extChips button').forEach(function(b){
+      b.onclick=function(){ externals.splice(Number(b.getAttribute('data-i')),1); drawExt(); updateAct(); };
+    });
+  }
+  function addExt(){
+    $('extInput').value.split(/[,;\s]+/).forEach(function(e){
+      e=e.trim(); if (e && externals.indexOf(e)===-1) externals.push(e);
+    });
+    $('extInput').value=''; drawExt(); updateAct();
+  }
+  $('extInput').onkeydown=function(ev){
+    if (ev.key==='Enter'||ev.key===','){ ev.preventDefault(); addExt(); }
+    else if (ev.key==='Backspace' && !$('extInput').value && externals.length){
+      externals.pop(); drawExt(); updateAct(); }
+  };
+  $('extInput').onblur=addExt;
+
+  // ── load ──
+  function load(){
+    clearTimeout(timer);
+    // Half-typed date or time — wait, don't fire a doomed lookup.
+    if (!$('date').value || !$('time').value){
+      $('stamp').textContent='Finish the date and time';
+      $('go').disabled=true;
+      return;
+    }
+    $('stamp').textContent=pretty()+' – '+endLabel();
+    $('roster').innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+    $('notices').innerHTML=''; $('nextwrap').innerHTML=''; $('why').textContent='';
+    google.script.run.withSuccessHandler(render)
+      .withFailureHandler(function(e){ fail("Couldn't read calendars. "+e.message); })
+      .getBoard(localStart(), dur());
+  }
+  function fail(m){
+    $('roster').innerHTML='';
+    $('notices').innerHTML='<div class="note bad"><span class="b"></span><span>'+esc(m)+' <b>Change the time to retry.</b></span></div>';
+    $('rest').style.display='none';
+    $('actA').textContent='Not connected'; $('actB').textContent='—';
+    $('dot').style.background='var(--busy)'; $('go').disabled=true;
+  }
+
+  function render(res){
+    if (!res||!res.ok){ fail(res?res.error:'Something went wrong.'); return; }
+    var first=!board; board=res;
+    $('clock').textContent=res.fetchedAt+' IST';
+    $('dot').style.background='var(--free)';
+    $('rest').style.display='block';
+    $('freeCount').textContent=res.freeCount+' of '+res.players.length+' free';
+    if (first){ fillYou(res.bookers); drawRevs(); } else { syncAll(); }
+
+    var n=[];
+    if (res.slot.isPast) n.push(['warn','That time has already passed.']);
+    if (res.slot.outsideHours) n.push(['warn','Outside 10am–7pm.']);
+    $('notices').innerHTML=n.map(function(x){
+      return '<div class="note '+x[0]+'"><span class="b"></span><span>'+x[1]+'</span></div>'; }).join('');
+
+    // Free first, then list order. Everyone stays selectable.
+    var sorted=res.players.slice().sort(function(a,b){
+      if (a.free!==b.free) return a.free?-1:1;
+      return a.rank-b.rank;
+    });
+
+    $('roster').innerHTML=sorted.map(function(p){
+      var rank = res.assignment==='order' ? '<span class="rank">#'+p.rank+'</span>' : '';
+      return '<div class="p" data-email="'+esc(p.email)+'">'+
+        '<span class="av">'+esc(p.initials)+'</span>'+
+        '<span class="who"><span class="n2">'+esc(p.name)+'</span>'+
+          '<span class="l2">'+esc(p.line)+'</span></span>'+
+        '<span class="rt"><span class="poc" style="display:none">POC</span>'+
+          '<span class="tag t-'+p.status.replace(' ','')+'">'+p.status+'</span>'+rank+'</span></div>';
+    }).join('');
+
+    document.querySelectorAll('.p').forEach(function(c){
+      c.onclick=function(){ pick(c.getAttribute('data-email')); };
+    });
+
+    pick(primary && res.players.some(function(x){ return x.email===primary; })
+         ? primary : res.suggestedPrimary);
+
+    buildTitle();
+    if (!res.anyFree) loadNext();
+    timer=setTimeout(load,45000);
+  }
+
+  function pick(email){
+    primary=email;
+    document.querySelectorAll('.p').forEach(function(c){
+      var on=c.getAttribute('data-email')===email;
+      c.classList.toggle('sel',on);
+      c.querySelector('.poc').style.display=on?'inline-block':'none';
+    });
+    var p=board&&board.players.filter(function(x){ return x.email===email; })[0];
+    if (!p){ updateAct(); return; }
+    if (email===board.suggestedPrimary){
+      $('why').innerHTML='<b>'+esc(p.name)+'</b> — '+esc(board.why);
+    } else {
+      var sug=(board.players.filter(function(x){ return x.email===board.suggestedPrimary; })[0]||{}).name||'—';
+      $('why').innerHTML='<b>'+esc(p.name)+'</b> — your pick, over '+esc(sug)+'.';
+    }
+    drawAutoAdd();
+    updateAct();
+  }
+
+  function loadNext(){
+    google.script.run.withSuccessHandler(function(r){
+      if (!r||!r.ok||!r.slots.length) return;
+      $('nextwrap').innerHTML='<div class="step"><span class="n">↳</span><h2>Times with someone free</h2></div>'+
+        '<div class="list">'+r.slots.map(function(s){
+          return '<button class="opt" data-start="'+s.localStart+'"><span class="t">'+esc(s.label)+
+            '</span><span class="w">'+esc(s.free.join(', '))+'</span></button>'; }).join('')+'</div>';
+      document.querySelectorAll('.opt').forEach(function(b){
+        b.onclick=function(){
+          var v=b.getAttribute('data-start').split('T');
+          $('date').value=v[0]; $('time').value=v[1]; load();
+        };
+      });
+    }).findNextSlots(dur(),5);
+  }
+
+  // ── action — always able to block ──
+  // Mirrors what bookMeeting actually puts on the invite, deduped.
+  function guestEmails(){
+    var seen={}, out=[];
+    function add(e){
+      e=String(e||'').trim().toLowerCase();
+      if (e && !seen[e]){ seen[e]=1; out.push(e); }
+    }
+    if (primary) add(primary);
+    add($('you').value);
+    if (board && board.blockAll) board.players.forEach(function(x){ add(x.email); });
+    if (board) board.reviewers.forEach(function(r){ if (revSel[r.email]) add(r.email); });
+    externals.forEach(add);
+    return out;
+  }
+
+  function updateAct(){
+    $('stamp').textContent=pretty()+' – '+endLabel();
+    var you=$('you').value;
+    var p=board&&board.players.filter(function(x){ return x.email===primary; })[0];
+    var total=guestEmails().length;
+    $('guestCount').textContent=total?total+' on the invite':'';
+
+    if (!you||!p){
+      $('flag').style.display='none';
+      $('actA').textContent = !you?'Pick your email in step 2':'Pick a POC';
+      $('actB').textContent = pretty()+' · '+dur()+'m';
+      $('go').disabled=true; return;
+    }
+
+    if (p.warn){ $('flag').textContent=p.warn; $('flag').style.display='block'; }
+    else { $('flag').style.display='none'; }
+
+    $('actA').textContent=p.name+' leads · '+total+' on the invite';
+    $('actB').textContent=pretty()+' · '+dur()+'m';
+    $('go').disabled=busy;
+    $('go').textContent=busy?'Blocking…':'Block';
+  }
+
+  $('go').onclick=function(){
+    if (busy||!primary||!$('you').value) return;
+    addExt();
+    var bad=externals.filter(function(e){ return !okEmail(e); });
+    if (bad.length){ alert("This doesn't look like an email: "+bad.join(', ')); return; }
+    if (!$('title').value.trim()){ alert('The invite needs a title.'); return; }
+    busy=true; updateAct();
+    google.script.run
+      .withSuccessHandler(function(r){ busy=false; updateAct(); done(r); })
+      .withFailureHandler(function(e){ busy=false; updateAct(); done({ok:false,error:e.message}); })
+      .bookMeeting({
+        you: $('you').value, primaryEmail: primary,
+        localStart: localStart(), duration: dur(),
+        title: $('title').value.trim(), company: $('company').value.trim(), callType: callType,
+        reviewers: board.reviewers.filter(function(r){ return revSel[r.email]; })
+                        .map(function(r){ return r.email; }),
+        externals: externals
+      });
+  };
+
+  function done(r){
+    if (!r||!r.ok){
+      $('result').innerHTML='<div class="note bad"><span class="b"></span><span>'+esc(r?r.error:'Booking failed.')+'</span></div>';
+      $('result').scrollIntoView({behavior:'smooth',block:'nearest'}); return;
+    }
+    $('result').innerHTML='<div class="done">'+
+      '<div class="hd"><i></i><h3>Slot blocked</h3></div>'+
+      '<div class="kv"><span class="k">POC</span><span>'+esc(r.primary)+'</span></div>'+
+      '<div class="kv"><span class="k">Held for</span><span>'+
+        (r.playersBlocked>1 ? 'all '+r.playersBlocked+' players' : esc(r.primary)+' only')+'</span></div>'+
+      '<div class="kv"><span class="k">Title</span><span>'+esc(r.title)+'</span></div>'+
+      '<div class="kv"><span class="k">When</span><span>'+esc(r.when)+'</span></div>'+
+      '<div class="kv"><span class="k">Invited</span><span>'+r.guests+'</span></div>'+
+      (r.conflict?'<div class="kv flagged"><span class="k">Heads up</span><span>'+esc(r.conflict)+'</span></div>':'')+
+      (r.note?'<div class="kv"><span class="k">Note</span><span>'+esc(r.note)+'</span></div>':'')+
+      '<div class="links"><a href="'+r.link+'" target="_blank">Open in Calendar</a>'+
+        (r.meet?'<a href="'+r.meet+'" target="_blank">Join link</a>':'')+'</div></div>';
+    externals=[]; drawExt();
+    $('result').scrollIntoView({behavior:'smooth',block:'nearest'});
+    setTimeout(load,1500);
+  }
+
+  setType('Requirement');
+  load();
+</script>
+</body>
+</html>
