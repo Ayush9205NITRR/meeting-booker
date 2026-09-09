@@ -305,8 +305,37 @@ async function handleRequest(action, payload) {
       });
       return result || { ok: true, contacts: [] };
     }
-    // The BD's own contacts for the home-page queue. No mock: a fake
-    // queue would have a BD working a list that doesn't exist.
+    // The BD's accounts for the home-page queue, read straight from
+    // Airtable. One HTTP call, no Apps Script in the middle, and the
+    // stage is the one the sync already computed — so this is both fast
+    // and the same number the rest of the business sees.
+    //
+    // Cached briefly because the complaint was about every refresh, and
+    // Kylas is a page BDs reload constantly. Airtable is refreshed by the
+    // sync on its own schedule, so a couple of minutes stale is not a
+    // thing anyone can notice.
+    case "getMyAccounts": {
+      const key = "accounts:" + (payload.ownerEmail || "");
+      const cached = await chrome.storage.local.get([key, key + ":at"]);
+      const fresh = cached[key] && Date.now() - (cached[key + ":at"] || 0) < 3 * 60 * 1000;
+      if (fresh) return { ok: true, source: "cache", accounts: cached[key] };
+
+      const remote = queueColumnsFrom(await cachedRemoteConfig());
+      const direct = await airtableMyAccounts(payload.ownerEmail, remote);
+      if (direct && direct.ok) {
+        await chrome.storage.local.set({ [key]: direct.accounts, [key + ":at"]: Date.now() });
+        return direct;
+      }
+      // A stale list beats an empty queue while Airtable is unreachable.
+      if (cached[key]) return { ok: true, source: "cache", stale: true, accounts: cached[key] };
+      if (direct) return direct;
+      return {
+        ok: false,
+        error: "Set a read-only Airtable token in the extension popup to see your accounts.",
+      };
+    }
+    // The old contact-level queue, kept for the fallback path.
+    // No mock: a fake queue would have a BD working a list that doesn't exist.
     case "getMyContacts": {
       const result = await callBackend({
         action: "myContacts",

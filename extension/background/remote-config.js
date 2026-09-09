@@ -90,3 +90,21 @@ function queueConfigFrom(config) {
   const buckets = config && config.queue && config.queue.buckets;
   return Array.isArray(buckets) && buckets.length ? { buckets } : null;
 }
+
+// Whatever copy of the config is already on disk, without going to the
+// network. The queue is the one place where waiting on GitHub would be
+// felt: it would put a round trip in front of the Airtable call that the
+// BD is actually waiting for. Column overrides are rare, so an
+// out-of-date copy — or none at all — is the right trade here. The next
+// company overlay refreshes it.
+async function cachedRemoteConfig() {
+  const cached = await chrome.storage.local.get("remoteConfig");
+  return cached.remoteConfig || null;
+}
+
+// Airtable column names for the account queue, so a rename in Airtable is
+// a config edit on GitHub rather than an extension release.
+function queueColumnsFrom(config) {
+  const cols = config && config.queue && config.queue.accountColumns;
+  return cols && typeof cols === "object" ? cols : null;
+}

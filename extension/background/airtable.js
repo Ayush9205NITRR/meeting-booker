@@ -152,3 +152,118 @@ async function airtableCompanyLookup(companyId) {
     },
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────
+//  The BD's accounts, straight from `Company List`.
+//
+//  The queue used to be built from live Kylas contact searches through
+//  Apps Script: hundreds of contacts, several round trips, and a rollup
+//  computed in the browser on every refresh. Airtable already holds the
+//  answer — kylas-airtable-sync writes Account Pipeline Stage per company
+//  using exactly the rollup rule we were re-implementing — so reading it
+//  is both faster and the same number the rest of the business sees.
+//
+//  Everything here is a column the sync maintains. Nothing needs a live
+//  stage lookup, which is what makes it quick and what stops the queue
+//  disagreeing with Airtable.
+// ─────────────────────────────────────────────────────────────────────
+
+// Column names, from kylas-airtable-sync's config/field_map.json. A
+// rename in Airtable is the one thing that breaks this, so they live in
+// one place and can be overridden from config/overlay-config.json.
+const ACCOUNT_COLUMNS = {
+  id: "Kylas Company Id",
+  name: "Company Name - Kylas",
+  owner: "Owner - Kylas",
+  ownerEmail: "Owner Email",
+  stage: "Account Pipeline Stage",
+  lastCalled: "Last Called At (Contacts)",
+  status: "Status of Reachout",
+  accountStatus: "Account Status",
+  totalPocs: "Total POCs",
+  connectedPocs: "Connected POCs",
+  mqlPocs: "MQL POCs",
+};
+
+function accountFilterFormula(columns, ownerEmail) {
+  const email = String(ownerEmail || "").trim().toLowerCase().replace(/'/g, "\\'");
+  // LOWER() both sides: Airtable stores whatever was typed, and a BD's
+  // address differing only in case would silently return nothing.
+  return `LOWER(TRIM({${columns.ownerEmail}} & '')) = '${email}'`;
+}
+
+/**
+ * Every account owned by one BD. Returns null when no token is set, so
+ * the caller can fall back the same way the company lookup does.
+ */
+async function airtableMyAccounts(ownerEmail, columnOverrides) {
+  const { pat, baseId, table } = await airtableSettings();
+  if (!pat) return null;
+  if (!ownerEmail) {
+    return { ok: false, error: "Set your email in the extension popup to see your accounts." };
+  }
+
+  const columns = Object.assign({}, ACCOUNT_COLUMNS, columnOverrides || {});
+  const wanted = [...new Set(Object.values(columns))];
+
+  const rows = [];
+  let offset = "";
+
+  // Airtable pages at 100. A BD with a few hundred accounts is normal, so
+  // this follows the offset rather than quietly truncating; the cap stops
+  // a misconfigured filter from pulling the whole base.
+  for (let page = 0; page < 15; page++) {
+    const params = new URLSearchParams({
+      pageSize: "100",
+      filterByFormula: accountFilterFormula(columns, ownerEmail),
+    });
+    wanted.forEach((f) => params.append("fields[]", f));
+    if (offset) params.set("offset", offset);
+
+    const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}?${params}`;
+
+    let res;
+    try {
+      res = await fetch(url, { headers: { Authorization: `Bearer ${pat}` } });
+    } catch (err) {
+      return { ok: false, error: `Could not reach Airtable: ${err}` };
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, error: "Airtable rejected the token. Check the PAT in the extension popup." };
+    }
+    if (res.status === 422) {
+      // Almost always a renamed column: the formula or a fields[] entry
+      // names something that no longer exists.
+      return {
+        ok: false,
+        error:
+          "Airtable rejected the query — usually a renamed column. Expected: " +
+          wanted.join(", "),
+      };
+    }
+    if (!res.ok) return { ok: false, error: `Airtable returned ${res.status}.` };
+
+    const body = await res.json();
+    (body.records || []).forEach((r) => {
+      const f = airtableFlatten(r.fields);
+      rows.push({
+        id: f[columns.id] || r.id,
+        name: f[columns.name] || "(unnamed account)",
+        owner: f[columns.owner] || "",
+        stage: f[columns.stage] || "",
+        lastCalledAt: f[columns.lastCalled] || "",
+        status: f[columns.status] || "",
+        accountStatus: f[columns.accountStatus] || "",
+        totalPocs: f[columns.totalPocs] || "",
+        connectedPocs: f[columns.connectedPocs] || "",
+        mqlPocs: f[columns.mqlPocs] || "",
+      });
+    });
+
+    offset = body.offset || "";
+    if (!offset) break;
+  }
+
+  return { ok: true, source: "airtable", accounts: rows };
+}

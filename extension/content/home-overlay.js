@@ -18,7 +18,12 @@
   let byAccount = queueCfg.groupBy !== "contact";
 
   let panel = null;
-  let state = { loading: true, error: "", contacts: null, owner: null, open: null, showStages: false };
+  let state = {
+    loading: true, error: "", owner: null, open: null, showStages: false,
+    accounts: null,   // from Airtable — already account-level
+    contacts: null,   // fallback: live Kylas contacts, rolled up here
+    source: "", stale: false,
+  };
 
   const esc = (s) => KylasOverlay.escapeHtml(s);
 
@@ -99,6 +104,10 @@
   function inBucket(row, bucket) {
     if (bucket.rule === "neverCalled") return !row.lastCalledAt;
     if (bucket.rule === "nextCallToday") {
+      // Next call date is a contact field, and Company List doesn't carry
+      // one. Rather than draw a bucket that can never fill, accounts mode
+      // hides it — see hasRule() below.
+      if (state.accounts) return false;
       return byAccount
         ? row.contacts.some((c) => c.nextCallDate === todayStr())
         : row.nextCallDate === todayStr();
@@ -108,12 +117,24 @@
   }
 
   function rows() {
+    // Airtable rows are already accounts, with the stage the sync
+    // computed. Rolling contacts up in the browser is only for the
+    // fallback path, where all we have is a contact list.
+    if (state.accounts) return state.accounts;
     return byAccount ? accounts() : state.contacts || [];
+  }
+
+  // A bucket that cannot be computed from the current data source is
+  // dropped rather than shown permanently empty — an empty bucket reads
+  // as "nothing to do here", which is a different and wrong statement.
+  function usableBuckets() {
+    if (!state.accounts) return config;
+    return config.filter((b) => b.rule !== "nextCallToday");
   }
 
   function bucketed() {
     const list = rows();
-    return config.map((b) => ({ ...b, contacts: list.filter((r) => inBucket(r, b)) }));
+    return usableBuckets().map((b) => ({ ...b, contacts: list.filter((r) => inBucket(r, b)) }));
   }
 
   function render() {
@@ -185,6 +206,22 @@
     // links to the first and says how many others are on it. That keeps
     // the click useful without pretending an account is a person.
     const row = (r) => {
+      // An Airtable account row has no contacts attached — it links to
+      // the company itself, which is the page a BD wants anyway.
+      if (state.accounts) {
+        const pocs = [r.totalPocs && r.totalPocs + " POCs", r.connectedPocs && r.connectedPocs + " connected"]
+          .filter(Boolean)
+          .join(" · ");
+        return `
+          <a class="ko-p" href="/sales/companies/details/${esc(r.id)}">
+            <span class="ko-who">
+              <span class="ko-n2">${esc(r.name)}</span>
+              <span class="ko-l2">${esc([r.stage, pocs].filter(Boolean).join(" · "))}</span>
+            </span>
+            ${r.status ? `<span class="ko-tag">${esc(r.status)}</span>` : ""}
+          </a>`;
+      }
+
       const first = byAccount ? r.contacts[0] : r;
       const others = byAccount ? r.contacts.length - 1 : 0;
       const sub = byAccount
@@ -219,15 +256,15 @@
   // renamed stage in Kylas gets spotted instead of silently vanishing.
   function stagesHtml() {
     const counts = {};
-    (state.contacts || []).forEach((c) => {
+    rows().forEach((c) => {
       const key = c.stage || "(no stage)";
       counts[key] = (counts[key] || 0) + 1;
     });
 
     const claimed = {};
-    config.forEach((b) => (b.stages || []).forEach((s) => (claimed[norm(s)] = true)));
+    usableBuckets().forEach((b) => (b.stages || []).forEach((s) => (claimed[norm(s)] = true)));
 
-    const rows = Object.keys(counts)
+    const list = Object.keys(counts)
       .sort((a, b) => counts[b] - counts[a])
       .map(
         (name) => `
@@ -240,7 +277,7 @@
       )
       .join("");
 
-    return `<div class="ko-raw">${rows || '<div class="ko-raw-row">No contacts.</div>'}</div>`;
+    return `<div class="ko-raw">${list || '<div class="ko-raw-row">Nothing to show.</div>'}</div>`;
   }
 
   async function load() {
@@ -248,24 +285,47 @@
     render();
     try {
       const { bookerEmail } = await chrome.storage.sync.get("bookerEmail");
-      const res = await KylasOverlay.request("getMyContacts", { ownerEmail: bookerEmail || "" });
-      if (!res || res.ok === false) {
-        state.error =
-          (res && res.error) ||
-          "Could not load your contacts. Set the POC Router URL in the extension popup.";
-      } else {
-        state.contacts = res.contacts || [];
-        state.owner = res.owner || null;
+
+      // Airtable first. Company List already holds Account Pipeline Stage
+      // — computed by the sync with the same "best stage on the account"
+      // rule — so this is one fast call and the number matches what the
+      // team sees in Airtable. The live Kylas path stays as the fallback.
+      const res = await KylasOverlay.request("getMyAccounts", {
+        ownerEmail: bookerEmail || "",
+      });
+
+      if (res && res.ok && Array.isArray(res.accounts)) {
+        state.accounts = res.accounts;
+        state.contacts = null;
+        state.source = res.source || "airtable";
+        state.stale = !!res.stale;
+        state.owner = { name: bookerEmail || "you", email: bookerEmail || "" };
         state.error = "";
-        // Buckets edited on GitHub arrive with the data. An empty list is
-        // ignored rather than drawn, so a bad commit can't leave a BD
-        // staring at a queue with no buckets in it.
-        if (res.queueConfig) {
-          queueCfg = res.queueConfig;
-          byAccount = queueCfg.groupBy !== "contact";
+      } else {
+        // No Airtable token, or Airtable is unreachable with nothing
+        // cached. Fall back to the live contact search rather than showing
+        // an empty queue — slower, but a working queue beats none.
+        const legacy = await KylasOverlay.request("getMyContacts", {
+          ownerEmail: bookerEmail || "",
+        });
+        if (legacy && legacy.ok) {
+          state.contacts = legacy.contacts || [];
+          state.accounts = null;
+          state.source = "kylas";
+          state.owner = legacy.owner || null;
+          state.error = "";
+          if (legacy.queueConfig) {
+            queueCfg = legacy.queueConfig;
+            byAccount = queueCfg.groupBy !== "contact";
+          }
+          const remote = legacy.queueConfig && legacy.queueConfig.buckets;
+          if (Array.isArray(remote) && remote.length) config = remote;
+        } else {
+          state.error =
+            (res && res.error) ||
+            (legacy && legacy.error) ||
+            "Could not load your accounts. Set your email and Airtable token in the extension popup.";
         }
-        const remote = res.queueConfig && res.queueConfig.buckets;
-        if (Array.isArray(remote) && remote.length) config = remote;
       }
     } catch (err) {
       state.error = String(err);
@@ -286,7 +346,7 @@
     HOME_PATH,
     () => {
       panel.setVisible(true);
-      panel.setHeader({ name: "My queue", avatar: "◎", subtitleHtml: "Your contacts by stage" });
+      panel.setHeader({ name: "My queue", avatar: "◎", subtitleHtml: "Your accounts by stage" });
       if (!state.contacts) load();
       else render();
     },

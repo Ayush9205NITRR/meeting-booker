@@ -142,6 +142,20 @@
       "Offsite Dealyed": "Offsite Delayed",
       "POC - Organisation - Changed": "POC - Organization - Changed",
       "Yet to Be Mined": "LinkedIn Outreach Initiated"
-    }
+    },
+    "accountColumns": {
+      "id": "Kylas Company Id",
+      "name": "Company Name - Kylas",
+      "owner": "Owner - Kylas",
+      "ownerEmail": "Owner Email",
+      "stage": "Account Pipeline Stage",
+      "lastCalled": "Last Called At (Contacts)",
+      "status": "Status of Reachout",
+      "accountStatus": "Account Status",
+      "totalPocs": "Total POCs",
+      "connectedPocs": "Connected POCs",
+      "mqlPocs": "MQL POCs"
+    },
+    "_accountColumns_comment": "Which Company List columns the queue reads. Names come from kylas-airtable-sync's config/field_map.json \u2014 rename a column in Airtable and change it here, no extension release needed."
   }
 }
