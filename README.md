@@ -18,28 +18,35 @@ Kylas Contact page   →  "Book Meeting"     →  meeting type → slots → con
 
 ## Status
 
-- **Extension**: functional, ships with a demo-data fallback so you can load
+- **Extension**: working. Ships with a demo-data fallback, so you can load
   it and click through the whole flow before the backend is wired up.
-- **Backend**: `src/Code.gs` received — it has `TZ`, `PLAYERS`/`BOOKERS`/
-  `REVIEWERS`, `getBoard()`, `findNextSlots()` and `bookMeeting()`, all of
-  which the new endpoints below wrap directly (no new allocation logic to
-  write). `bookMeeting()` as it stands only touches the calendar — Kylas
-  deal creation isn't in this file, so `src/Kylas.gs` and `src/index.html`
-  are still needed to see how/where that's wired in before the
-  `bookMeeting`/`addNotes` endpoints below can be finished.
+- **Backend**: `Overlay.gs` (Airtable lookups, deal setup, the BD queue) and
+  `Kylas.gs` (deal creation, contact stage, notes) are in `apps-script/`.
+  `Code.gs` and `index.html` still live only in the Apps Script editor —
+  the **Import from Apps Script** workflow pulls them in. See
+  [`SETUP.md`](SETUP.md).
+- **Not done yet**: `KYLAS.pipelines` still holds `0` ids. Run
+  `kylasSetup()` in the Apps Script editor and fill them in — a deal will
+  refuse to be created until they're set, rather than landing in the wrong
+  pipeline.
 
-## Changing what the overlay shows
+## How this repo works
 
-Edit [`config/overlay-config.json`](config/overlay-config.json) on github.com
-and commit. Every BD's overlay follows within ten minutes — no reinstall, no
-deploy, no developer. That file controls the company panel's fields and the
-home-page queue's buckets; GitHub validates it on commit, and a bad edit
-leaves everyone on the previous version rather than breaking anything.
+Everything lives here — the extension **and** the Apps Script backend — and
+each part ships itself.
 
-See [`config/README.md`](config/README.md) for the format, and
-[`.github/workflows/README.md`](.github/workflows/README.md) for what else
-runs on GitHub — including the one thing that can't (Actions cannot serve
-requests, so booking still needs the Apps Script web app).
+| To change | Edit | Live in |
+|---|---|---|
+| What the overlay shows, queue buckets | [`config/overlay-config.json`](config/overlay-config.json) on github.com | ~10 min, automatically |
+| Backend logic | `apps-script/` | on push, automatically |
+| Extension code | `extension/` | on push, automatically *(once signing is set up)* |
+
+You never open the Apps Script editor and BDs never reinstall anything.
+
+**Start here: [`SETUP.md`](SETUP.md)** — the one-time checklist.
+Then [`config/README.md`](config/README.md) for the day-to-day edits, and
+[`.github/workflows/README.md`](.github/workflows/README.md) for what each
+workflow does.
 
 ## Setup
 

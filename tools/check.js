@@ -23,19 +23,43 @@ const bad = (m) => { console.log('  FAIL  ' + m); failed++; };
 const warn = (m) => console.log('  warn  ' + m);
 
 // ---------- Apps Script ----------
-console.log('\nApps Script (poc-router/)');
-const overlay = read('poc-router/Overlay.gs');
-const kylas = read('poc-router/Kylas.gs');
+console.log('\nApps Script (apps-script/)');
+// Every .gs in the folder, not a fixed list: once "Import from Apps
+// Script" has run, Code.gs and anything else the project holds live here
+// too, and they have to pass the same checks.
+const gsFiles = fs.readdirSync(path.join(root, 'apps-script'))
+  .filter((f) => f.endsWith('.gs'))
+  .sort();
 
-for (const [name, src] of [['Overlay.gs', overlay], ['Kylas.gs', kylas]]) {
-  try { new Function(src); ok(name + ' parses'); }
+const sources = {};
+for (const name of gsFiles) {
+  sources[name] = read('apps-script/' + name);
+  try { new Function(sources[name]); ok(name + ' parses'); }
   catch (e) { bad(name + ' parse error: ' + e.message); }
 }
 
-// Both land in one Apps Script project, so a shared top-level name is a
-// duplicate declaration at runtime even though each file parses alone.
-try { new Function(overlay + '\n' + kylas); ok('Overlay.gs + Kylas.gs share no top-level names'); }
-catch (e) { bad('together they do not parse: ' + e.message); }
+// They all land in ONE Apps Script project, which has a single global
+// namespace — so a name declared in two files is a duplicate declaration
+// at runtime even though each file parses fine on its own. This is the
+// check that catches a helper in Kylas.gs colliding with one in Code.gs.
+try {
+  new Function(gsFiles.map((n) => sources[n]).join('\n'));
+  ok(gsFiles.length + ' .gs file(s) share no top-level names');
+} catch (e) {
+  bad('the .gs files do not parse together: ' + e.message);
+}
+
+const overlay = sources['Overlay.gs'] || '';
+const kylas = sources['Kylas.gs'] || '';
+if (!kylas) bad('apps-script/Kylas.gs is missing');
+if (!overlay) bad('apps-script/Overlay.gs is missing');
+
+// Until the import has run, the live project's own files aren't here yet.
+// Deploying in that state would delete them, so say so loudly — the deploy
+// workflow refuses on the same condition.
+if (!gsFiles.includes('Code.gs')) {
+  warn('Code.gs is not in the repo yet — run the "Import from Apps Script" workflow before deploying');
+}
 
 const puts = [...kylas.matchAll(/kylasFetch_\(\s*'PUT'\s*,\s*([^,]+),/g)].map((m) => m[1].trim());
 if (!puts.length) {

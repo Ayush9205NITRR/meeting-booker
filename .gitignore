@@ -1,3 +1,10 @@
 # The Airtable token. Copy secrets.example.js to secrets.js and fill it in.
 # Never commit the real one.
 extension/config/secrets.js
+
+# CRX signing key — never commit this. It fixes the extension id;
+# losing it means every BD reinstalls, leaking it means someone else
+# can publish an "update" to your extension.
+key.pem
+*.pem
+dist/

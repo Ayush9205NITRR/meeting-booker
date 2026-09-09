@@ -1,0 +1,82 @@
+# ONE-TIME (or whenever someone has edited in the Apps Script editor).
+#
+# Pulls every file out of the live Apps Script project and commits it into
+# apps-script/. After this runs, the repo holds Code.gs, index.html,
+# appsscript.json — everything — and git becomes the source of truth.
+#
+# Nobody has to paste anything anywhere. Run it once, and from then on the
+# only way code changes is a commit.
+
+name: Import from Apps Script
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check secrets
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "::error::Set the CLASPRC_JSON and APPS_SCRIPT_ID secrets first — see .github/workflows/README.md."
+            exit 1
+          fi
+
+      - name: Install clasp
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: Pull the live project
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          mkdir -p pulled
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > pulled/.clasp.json
+          cd pulled && clasp pull
+          rm -f .clasp.json
+          echo "--- pulled ---"
+          ls -1
+
+      # The repo's own Overlay.gs / Kylas.gs are newer than whatever is
+      # live (they may not even be pasted in yet), so the live copies of
+      # those two are discarded and everything else is taken.
+      - name: Merge into apps-script/
+        run: |
+          mkdir -p apps-script
+          rm -f pulled/Overlay.gs pulled/Kylas.gs
+          cp -a pulled/. apps-script/
+          rm -rf pulled
+          echo "--- apps-script/ now holds ---"
+          ls -1 apps-script
+
+      - name: Sanity check
+        run: |
+          test -f apps-script/Code.gs || { echo "::error::No Code.gs came back — is APPS_SCRIPT_ID the right project?"; exit 1; }
+          npm run check
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps-script
+          if git diff --cached --quiet; then
+            echo "::notice::Already in sync — nothing to commit."
+          else
+            git commit -m "Import Apps Script project into the repo" \
+              -m "Pulled from the live project so git is the source of truth. From here on, code changes happen as commits and Deploy Apps Script ships them."
+            git push
+          fi

@@ -1,0 +1,179 @@
+# Publishes the extension so that pushing to main puts the change on every
+# BD's browser, with nobody reinstalling anything.
+#
+# Two outputs, and you pick which one you use:
+#
+#   dist/kylas-overlay.crx + updates.xml   auto-update. Chrome checks the
+#     (GitHub Pages)                        update URL every few hours and
+#                                           installs the new version by
+#                                           itself. Needs the extension
+#                                           force-installed once from the
+#                                           Google Admin console, and a
+#                                           CRX_PRIVATE_KEY secret.
+#
+#   kylas-overlay-<version>.zip            manual. Someone unzips and does
+#     (build artifact / Release)            Load unpacked. Always produced,
+#                                           needs no secrets — this is the
+#                                           fallback and how you install
+#                                           the very first time.
+#
+# The version is set to <major>.<minor>.<run number> at build time, so it
+# always goes up and Chrome always sees an update. Nobody has to remember
+# to bump manifest.json.
+
+name: Release extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extension/**"
+      - ".github/workflows/release-extension.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-extension
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      signed: ${{ steps.sign.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run checks
+        run: npm run check
+
+      - name: Set version
+        id: version
+        run: |
+          BASE=$(node -p "require('./extension/manifest.json').version.split('.').slice(0,2).join('.')")
+          VERSION="$BASE.${{ github.run_number }}"
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("extension/manifest.json", "utf8"));
+            m.version = process.argv[1];
+            fs.writeFileSync("extension/manifest.json", JSON.stringify(m, null, 2) + "\n");
+          ' "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "::notice::Building $VERSION"
+
+      # Always built, needs nothing. This is what you hand someone for a
+      # first install, and the fallback if the signed path isn't set up.
+      - name: Build zip
+        run: cd extension && zip -qr "../kylas-overlay-${{ steps.version.outputs.version }}.zip" . -x '*.DS_Store'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kylas-overlay-${{ steps.version.outputs.version }}-zip
+          path: kylas-overlay-${{ steps.version.outputs.version }}.zip
+          retention-days: 90
+
+      # ---- signed build, for auto-update ----
+      - name: Sign
+        id: sign
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          if [ -z "$CRX_PRIVATE_KEY" ]; then
+            echo "::warning::CRX_PRIVATE_KEY not set — zip only, no auto-update. See .github/workflows/README.md."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf '%s' "$CRX_PRIVATE_KEY" > key.pem
+          EXT_ID=$(node tools/crx-id.js key.pem)
+          # GitHub Pages hosts are lowercase; the owner login may not be.
+          OWNER=$(echo "${{ github.repository_owner }}" | tr 'A-Z' 'a-z')
+          PAGES="https://$OWNER.github.io/${{ github.event.repository.name }}"
+
+          # Chrome reads the update URL from the policy for a force-installed
+          # extension, but carrying it in the manifest too means a manually
+          # installed copy also auto-updates.
+          # `key` pins the extension id for a Load-unpacked install too, so
+          # the id in the Admin console is the same one a BD sees whether
+          # the copy came from the CRX or from the zip. Without it Chrome
+          # invents a random id per unpacked folder.
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("extension/manifest.json", "utf8"));
+            m.update_url = process.argv[1] + "/updates.xml";
+            m.key = process.argv[2];
+            fs.writeFileSync("extension/manifest.json", JSON.stringify(m, null, 2) + "\n");
+          ' "$PAGES" "$(node tools/crx-id.js key.pem --der-base64)"
+
+          # --pack-extension is a stable Chrome flag and produces a CRX3
+          # signed with this key. The key fixes the extension id forever,
+          # which is what the Admin console pins the install to.
+          CHROME=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
+          test -n "$CHROME" || { echo "::error::No Chrome on the runner to pack the CRX."; exit 1; }
+          "$CHROME" --pack-extension="$PWD/extension" --pack-extension-key="$PWD/key.pem" \
+                    --no-message-box --no-sandbox
+          rm -f key.pem
+
+          mkdir -p dist
+          mv extension.crx "dist/kylas-overlay.crx"
+
+          cat > dist/updates.xml <<XML
+          <?xml version='1.0' encoding='UTF-8'?>
+          <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+            <app appid='$EXT_ID'>
+              <updatecheck codebase='$PAGES/kylas-overlay.crx' version='${{ steps.version.outputs.version }}' />
+            </app>
+          </gupdate>
+          XML
+
+          # Rebuilt, not copied: this one carries update_url and key, so a
+          # hand-installed copy has the same id and auto-updates too.
+          (cd extension && zip -qr "../dist/kylas-overlay-${{ steps.version.outputs.version }}.zip" . -x '*.DS_Store')
+
+          # A page a BD can be pointed at, rather than a bare directory.
+          cat > dist/index.html <<HTML
+          <!doctype html><meta charset="utf-8"><title>Kylas Overlay</title>
+          <style>body{font:16px/1.6 system-ui;max-width:44rem;margin:3rem auto;padding:0 1rem}
+          code{background:#f3f4f6;padding:.15em .4em;border-radius:4px}</style>
+          <h1>Kylas Overlay</h1>
+          <p>Version <strong>${{ steps.version.outputs.version }}</strong></p>
+          <p>Extension ID: <code>$EXT_ID</code></p>
+          <p>If IT has rolled this out to you, it installs itself and updates itself —
+             there is nothing to do here.</p>
+          <h2>Installing it by hand</h2>
+          <ol>
+            <li><a href="kylas-overlay-${{ steps.version.outputs.version }}.zip">Download the zip</a> and unzip it.</li>
+            <li>Open <code>chrome://extensions</code> and turn on <strong>Developer mode</strong>.</li>
+            <li><strong>Load unpacked</strong>, and pick the unzipped folder.</li>
+          </ol>
+          <p>For admins: the update URL is <code>$PAGES/updates.xml</code>.</p>
+          HTML
+
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::Signed $EXT_ID version ${{ steps.version.outputs.version }}"
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.sign.outputs.signed == 'true'
+        with:
+          path: dist
+
+  # Separate job because deploy-pages needs its own environment.
+  publish:
+    needs: build
+    if: needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

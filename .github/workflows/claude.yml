@@ -1,0 +1,51 @@
+# Write what you want as a GitHub issue (or a comment on one), mention
+# @claude in it, and Claude makes the change and opens a pull request.
+#
+#   1. Issues -> New issue
+#   2. "@claude overlay me Last Call ka column bhi dikhao"
+#   3. Claude pushes a branch and opens a PR
+#   4. You read the diff, click Merge
+#   5. Deploy Apps Script ships it automatically
+#
+# Every change ends up as an issue, a PR and a commit — so what changed,
+# why, and who asked is all in one place, which is the whole point.
+
+name: Claude
+
+on:
+  issues:
+    types: [opened, assigned]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    # Only when someone actually mentions @claude, so ordinary issue
+    # chatter doesn't start a run.
+    if: |
+      contains(github.event.comment.body, '@claude') ||
+      contains(github.event.issue.body, '@claude') ||
+      contains(github.event.review.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The checks are what make this safe to use without reading every
+          # line: Claude can run them itself and fix what it broke before
+          # asking you to look.
+          claude_args: |
+            --allowedTools "Bash(npm run check),Bash(npm run check:config),Bash(git diff),Bash(git log)"
