@@ -21,15 +21,14 @@
   // names Kylas returns so the right one is preselected — the BD can always
   // override with the dropdown, so a miss costs a click, not a wrong deal.
   const TYPES = [
-    { id: "Requirement", label: "Active requirement", deal: "Active Requirement", pipelineHint: "requirement" },
-    { id: "Discovery", label: "Discovery", deal: "Discovery Call", pipelineHint: "discovery" },
-    { id: "DemandFunnel", label: "Demand funnel", deal: "Demand Funnel", pipelineHint: "demand" },
+    { id: "Requirement", label: "Active requirement", deal: "Active Requirement", pipelineHint: "demand funnel" },
+    { id: "Discovery", label: "Discovery", deal: "Discovery Call", pipelineHint: "demand funnel" },
   ];
   const typeOf = (id) => TYPES.find((t) => t.id === id) || TYPES[0];
 
   const state = {
     contactId: null,
-    callType: "Requirement", // Requirement | Discovery | DemandFunnel
+    callType: "Requirement", // Requirement | Discovery
     company: "",
     extra: "",
     title: "",
@@ -178,6 +177,11 @@
   // default is right for the other two.
   function applyPipelineDefault() {
     if (!state.pipelines || !state.pipelines.length) return;
+    // Which pipeline gets pre-selected. Kylas has no pipeline named after
+    // a booking type — both bookings live in Demand Funnel — so the hint
+    // names the real pipeline rather than the type. Falling through to
+    // pipelines[0] would work today only because Demand Funnel happens to
+    // come back first; a reorder in Kylas would silently move every deal.
     const hint = typeOf(state.callType).pipelineHint;
     const match =
       state.pipelines.find((p) => p.name.toLowerCase().includes(hint)) || state.pipelines[0];

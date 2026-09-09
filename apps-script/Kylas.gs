@@ -34,18 +34,22 @@ const KYLAS = {
   // Where a deal lands, per booking type. Read from the tenant with
   // kylasSetup(); re-run it if pipelines are renamed or replaced.
   //
-  // All three point at the same pipeline and stage on purpose. Kylas has
-  // no "Active Requirement" or "Discovery Call" pipeline — the two active
-  // deal pipelines are Demand Funnel and Marketing Funnel — and the BD
-  // team's decision is that these bookings are the same deal, told apart
-  // by name rather than by pipeline.
+  // Both point at the same pipeline and stage on purpose. Kylas has no
+  // "Active Requirement" or "Discovery Call" pipeline — the two active deal
+  // pipelines are Demand Funnel and Marketing Funnel — and the BD team's
+  // decision is that these bookings are the same deal, told apart by name
+  // rather than by pipeline.
+  //
+  // A "Demand Funnel" booking type used to sit here as a third entry and
+  // was dropped as unnecessary. An older extension still sending that
+  // callType falls through to Requirement below, which lands in the same
+  // place, so nothing breaks mid-rollout.
   //
   // Used as the fallback when the overlay's dropdown couldn't load. When
   // the BD picked a pipeline, that choice wins.
   pipelines: {
-    Requirement:  { pipelineId: 32572, stageId: 227155, name: 'Active Requirement' },
-    Discovery:    { pipelineId: 32572, stageId: 227155, name: 'Discovery Call' },
-    DemandFunnel: { pipelineId: 32572, stageId: 227155, name: 'Demand Funnel' }
+    Requirement: { pipelineId: 32572, stageId: 227155, name: 'Active Requirement' },
+    Discovery:   { pipelineId: 32572, stageId: 227155, name: 'Discovery Call' }
   },
 
   // INR. kylasSetup() prints what the tenant actually uses.
