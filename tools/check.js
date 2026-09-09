@@ -82,6 +82,36 @@ else bad('deal is created without ownedBy — owner falls back to the API key ac
 
 if (/pipelineId:\s*0/.test(kylas)) warn('KYLAS.pipelines still has 0 ids — run kylasSetup() and fill them in');
 
+// The manifest declares oauthScopes explicitly, which turns Apps Script's
+// auto-detection off — so a service used in code but missing from the list
+// fails at runtime with a permission error, not at deploy. Each service
+// below cost a failed run to discover.
+const manifestPath = path.join(root, 'apps-script', 'appsscript.json');
+if (fs.existsSync(manifestPath)) {
+  const appsScript = JSON.parse(read('apps-script/appsscript.json'));
+  const scopes = appsScript.oauthScopes || [];
+  const allCode = gsFiles.map((n) => sources[n]).join('\n');
+
+  const needs = [
+    ['UrlFetchApp', 'https://www.googleapis.com/auth/script.external_request'],
+    ['Calendar.', 'https://www.googleapis.com/auth/calendar'],
+    ['Session.get', 'https://www.googleapis.com/auth/userinfo.email'],
+  ];
+
+  if (!scopes.length) {
+    warn('appsscript.json declares no oauthScopes — Apps Script will auto-detect, which does not re-prompt an already-authorised user');
+  } else {
+    let missing = 0;
+    for (const [service, scope] of needs) {
+      if (!allCode.includes(service)) continue;
+      if (scopes.includes(scope)) continue;
+      bad(service + ' is used but ' + scope + ' is not in appsscript.json oauthScopes');
+      missing++;
+    }
+    if (!missing) ok(scopes.length + ' oauthScopes cover every service the code calls');
+  }
+}
+
 // ---------- extension ----------
 console.log('\nExtension');
 const manifest = JSON.parse(read('extension/manifest.json'));
