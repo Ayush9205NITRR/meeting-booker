@@ -349,6 +349,9 @@
       <div class="ko-tags">
         ${you ? `<span class="ko-fixed"><span class="ko-tk">✓</span>${esc(you.split("@")[0])} (you)</span>` : ""}
         ${b.reviewers
+          // The booker already has a fixed chip; showing them again as a
+          // toggleable reviewer reads as the same person listed twice.
+          .filter((r) => String(r.email).toLowerCase() !== String(you).toLowerCase())
           .map((r) => {
             if (!(r.email in state.revSel)) state.revSel[r.email] = !!r.default;
             return `<button class="ko-tg${state.revSel[r.email] ? " on" : ""}" data-e="${esc(r.email)}">
@@ -465,6 +468,7 @@
     const ct = state.assoc && state.assoc.contact;
 
     return `
+      <div class="ko-deal-wrap">
       <div class="ko-step"><span class="ko-n">5</span><h2>Deal</h2>
         <span class="ko-sub">created on booking</span></div>
       ${
@@ -523,6 +527,7 @@
         <div class="ko-kv"><span>Contact</span><span>${
           ct ? esc(ct.name) : `#${esc(state.contactId || "")}`
         }</span></div>
+      </div>
       </div>`;
   }
 

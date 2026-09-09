@@ -166,7 +166,7 @@ nothing renders as `[object Object]`. A company with no Airtable row is not an
 error: it returns `ok` with an empty `fields`, and the overlay says nothing is
 curated yet.
 
-Still to come (blocked on `Kylas.gs`): `bookMeeting`, `addNotes`.
+`Kylas.gs` is now in this folder too — see **Deal creation** below.
 
 ---
 
@@ -254,3 +254,67 @@ characters, so `CNC (Could Not Connect) – 1` still lands in **To exhaust**
 alongside `... - 1`. A cosmetic rename in Kylas won't silently empty a
 bucket — and **Show stages found** in the panel lists every distinct stage
 coming back, flagging any that no bucket claims.
+
+---
+
+## `Kylas.gs` — deals, contact stage, notes
+
+Written from the Kylas public Postman collection. Paste it in as a second
+file alongside `Overlay.gs`.
+
+### Before it will create anything
+
+1. Run **`kylasSetup()`** from the editor. It prints every deal pipeline
+   with its stage ids, and every user with their id.
+2. Fill in `KYLAS.pipelines` at the top of the file — one pipeline + first
+   stage id per booking type. They start at `0`, and a deal will refuse to
+   be created until they're set rather than landing somewhere wrong.
+3. Run **`kylasSelfTest()`** to confirm the key works and the ids are in.
+
+### The three rules it obeys
+
+`tools/check.js` fails the build on each of these, and each exists for a
+bug that already shipped:
+
+| Rule | Why |
+|---|---|
+| One `PUT`, inside `kylasUpdateContact_` | Kylas' Update Contact replaces the whole record. A partial body blanks the omitted fields **and resets `ownedBy` to the API key's account**. So it reads the contact, merges, and writes the whole record back. |
+| Stage changes via `.../pipeline-stages/{id}/activate` | Writing a stage field doesn't move a deal. |
+| `ownedBy` set at deal creation | Fixing an owner afterwards needs a `PUT` — see rule 1. |
+
+Verified by running the project's own `tools/check.js` against it, plus
+unit tests covering owner preservation, custom-field merging, currency
+parsing (`₹ 2,50,000` → `250000`), and the note escaping.
+
+### Wiring it to a booking
+
+Call `kylasOnBooked_(payload)` from `bookMeeting` **after** the calendar
+slot is blocked, and merge its result into the response:
+
+```js
+// at the end of bookMeeting, just before the return
+const crm = kylasOnBooked_({
+  contactId: p.contactId,
+  ownerId:   p.ownerId,          // the POC's Kylas user id
+  company:   p.company,
+  callType:  p.callType,
+  notes:     p.notes,
+  deal:      p.deal              // { name, pipelineId, stageId, companyId, value }
+});
+
+return {
+  ok: true,
+  /* ...everything bookMeeting already returns... */
+  dealId: crm.dealId,
+  crmErrors: crm.errors
+};
+```
+
+`kylasOnBooked_` never throws. The slot is already held by that point, and
+losing a booked meeting because a CRM write failed is the wrong trade —
+each step reports its own outcome in `errors` instead, and the overlay
+shows what landed.
+
+One thing to check on your side: `KYLAS.contactStageField` is set to
+`cfPipelineStageBd`, taken from kylas-airtable-sync's field map. If your
+contact's BD stage lives elsewhere, change that one constant.

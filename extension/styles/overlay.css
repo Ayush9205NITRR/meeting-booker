@@ -1311,3 +1311,91 @@ textarea {
 /* The queue's contact rows are links, so they need the anchor reset the
    roster rows don't. */
 a.ko-p { text-decoration: none; color: inherit; }
+
+/* ── UI pass ─────────────────────────────────────────────────
+   The booking panel had grown to one long scroll: five numbered
+   steps, a roster, chips and a deal form, with no visual rhythm
+   between them. These give the sections weight and stop the eye
+   sliding off.
+   ───────────────────────────────────────────────────────────── */
+
+/* Steps get a hairline above them so each reads as its own block. */
+.ko-step {
+  padding-top: 16px;
+  border-top: 1px solid var(--ko-line);
+}
+
+.ko-step:first-of-type {
+  padding-top: 4px;
+  border-top: 0;
+}
+
+.ko-n {
+  background: var(--ko-accent);
+  box-shadow: 0 0 0 3px var(--ko-accent-soft);
+}
+
+/* Inputs sit on the tinted ground so the panel reads as fields to
+   fill rather than a wall of white boxes. */
+textarea,
+input[type="text"] {
+  background: var(--ko-surface-2);
+  border-color: transparent;
+}
+
+textarea:focus,
+input[type="text"]:focus {
+  background: var(--ko-surface);
+  border-color: var(--ko-accent);
+}
+
+/* The generated invite title is the thing a BD checks before sending,
+   so give it a surface of its own instead of loose grey text. */
+.ko-prev {
+  background: var(--ko-surface-2);
+  border: 1px solid var(--ko-line);
+  border-radius: 9px;
+  padding: 10px 11px;
+  margin-top: 10px;
+}
+
+.ko-prev .ko-mono {
+  color: var(--ko-ink);
+}
+
+/* Date/start/length read as one control, not three. */
+.ko-when {
+  padding: 4px;
+  background: var(--ko-surface-2);
+  border-radius: 11px;
+}
+
+.ko-when .ko-tf {
+  border-color: transparent;
+  background: var(--ko-surface);
+}
+
+/* Roster rows were tight against the status pill on narrow names. */
+.ko-p { gap: 11px; }
+.ko-rt { min-width: 74px; }
+
+/* Deal step: it is the outcome of the booking, so mark it rather than
+   letting it read as one more form section. */
+.ko-deal-wrap {
+  background: linear-gradient(180deg, var(--ko-accent-soft) 0%, transparent 62%);
+  border: 1px solid #dfe0fb;
+  border-radius: 12px;
+  padding: 2px 12px 12px;
+  margin-top: 16px;
+}
+
+.ko-deal-wrap .ko-step {
+  border-top: 0;
+  padding-top: 12px;
+}
+
+/* Action bar sits flush to the panel edges and needs the same inset
+   the body has. */
+.ko-actbar { z-index: 2; }
+
+.ko-go:not(:disabled):hover { background: #000; }
