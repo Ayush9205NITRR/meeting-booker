@@ -59,6 +59,25 @@ async function getBackendUrl() {
   return bundledSettings().backendUrl || null;
 }
 
+// fetch() rejects with a bare "TypeError: Failed to fetch" for several very
+// different problems, and the browser deliberately says no more than that.
+// This turns the three that actually happen here into something a BD can act
+// on, instead of a message that reads like the extension is broken.
+function describeFetchFailure(err, url) {
+  const message = String((err && err.message) || err);
+  if (!/failed to fetch|networkerror|load failed/i.test(message)) return message;
+
+  if (/^https:\/\/script\.google\.com\//.test(url)) {
+    return (
+      "Couldn't reach the POC Router. Usually one of: you're signed out of " +
+      "the Google account the web app is shared with, the deployment's access " +
+      "isn't set to your domain, or the extension needs reloading after an " +
+      "update (chrome://extensions -> reload)."
+    );
+  }
+  return "Couldn't reach " + new URL(url).host + ". Check the URL in the extension popup.";
+}
+
 async function callBackend(params) {
   const backendUrl = await getBackendUrl();
   if (!backendUrl) return null;
@@ -67,8 +86,28 @@ async function callBackend(params) {
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
-  const res = await fetch(url.toString(), { credentials: "include" });
-  return res.json();
+
+  let res;
+  try {
+    res = await fetch(url.toString(), { credentials: "include" });
+  } catch (err) {
+    return { ok: false, error: describeFetchFailure(err, url.toString()) };
+  }
+
+  // Apps Script answers a signed-out or wrongly-shared request with an HTML
+  // sign-in page and a 200, so a JSON parse error here is an access problem,
+  // not a malformed response.
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        "The POC Router returned a sign-in page instead of data. Open the /exec " +
+        "URL in this browser once and sign in, then try again.",
+    };
+  }
 }
 
 async function postBackend(payload) {
@@ -77,13 +116,29 @@ async function postBackend(payload) {
 
   // text/plain avoids a CORS preflight against Apps Script's /exec endpoint
   // (application/json triggers an OPTIONS request Apps Script can't answer).
-  const res = await fetch(backendUrl, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload),
-  });
-  return res.json();
+  let res;
+  try {
+    res = await fetch(backendUrl, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    return { ok: false, error: describeFetchFailure(err, backendUrl) };
+  }
+
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        "The POC Router returned a sign-in page instead of data. Open the /exec " +
+        "URL in this browser once and sign in, then try again.",
+    };
+  }
 }
 
 function mockCompanyOverlay(companyId) {
