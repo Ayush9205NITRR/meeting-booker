@@ -88,7 +88,16 @@ jobs:
             const start = raw.indexOf("{");
             const end = raw.lastIndexOf("}");
             if (start < 0 || end < start) {
-              console.log("::error::CLASPRC_JSON has no JSON object in it. Paste the contents of ~/.clasprc.json, from { to }.");
+              // Describe the shape, never the content: enough to tell a
+              // swapped secret from a half-copied one without printing
+              // anything sensitive into a log.
+              const looksLikeScriptId = /^[A-Za-z0-9_-]{20,}$/.test(raw.trim());
+              const hint = looksLikeScriptId
+                ? "It looks like a bare id — the Script ID may have gone into CLASPRC_JSON by mistake. Check that each of the three secrets has the right value."
+                : raw.includes("logged in as")
+                  ? "It looks like just the `clasp login` banner. That line is printed by the command; the file itself is what `cat ~/.clasprc.json` shows."
+                  : "Run `cat ~/.clasprc.json` and copy everything it prints.";
+              console.log("::error::CLASPRC_JSON contains no JSON object (" + raw.trim().length + " characters, no `{`). " + hint);
               process.exit(1);
             }
             const text = raw.slice(start, end + 1);
