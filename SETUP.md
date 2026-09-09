@@ -60,6 +60,14 @@ into git.
 > deploy workflow refuses to run at all until `Code.gs` and an `.html` are
 > present.
 
+### What the import already took care of
+
+`doGet` used to need a hand-edit in the Apps Script editor to route the
+overlay's requests. That edit is now a commit like any other, and `doPost`
+— which the overlay needs to book anything — is in too. With no `?action=`
+parameter `doGet` serves the POC Router page exactly as before, so that
+page is unaffected.
+
 ---
 
 ## Part 2 — Let Claude make changes from the repo *(optional)*

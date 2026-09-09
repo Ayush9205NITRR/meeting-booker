@@ -27,10 +27,10 @@ Project Settings → **Script Properties** → Add:
 The PAT needs `data.records:read` on base `app55PsyRKqkf2CAQ`. It lives here
 next to `KYLAS_API_KEY` — never in the repo, never in the extension.
 
-### 3. Patch `doGet` in `Code.gs`
+### 3. `doGet` — already done
 
-The only change outside this folder. Two lines: the function takes `e`, and
-routes to the API when `?action=` is present.
+This used to be a hand-edit in the Apps Script editor. `Code.gs` now lives
+in this folder, so the routing is committed:
 
 ```js
 function doGet(e) {

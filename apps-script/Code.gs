@@ -76,11 +76,24 @@ const BOOKING_MODE = 'auto';
 
 // ============ 2. ENTRY POINT ============
 
-function doGet() {
+function doGet(e) {
+  // The Chrome overlay calls this same web app with ?action=..., so route
+  // those to the JSON API. With no action param the behaviour is exactly
+  // what it was: the POC Router page, unchanged.
+  const action = e && e.parameter && e.parameter.action;
+  if (action) return overlayApi_(e);
+
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('POC Router')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// The overlay's two write actions — booking a meeting and adding notes.
+// index.html doesn't use this path at all: it calls bookMeeting() directly
+// through google.script.run, so nothing here changes that page.
+function doPost(e) {
+  return overlayApiPost_(e);
 }
 
 // ============ 3. HELPERS ============

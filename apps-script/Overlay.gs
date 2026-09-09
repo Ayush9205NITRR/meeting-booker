@@ -91,6 +91,91 @@ function overlayApi_(e) {
   }
 }
 
+/**
+ * Called from Code.gs doPost. The extension's two write actions arrive as
+ * POSTs with a JSON body; everything it only reads goes through
+ * overlayApi_ above.
+ *
+ * The body is sent as text/plain on purpose — application/json would
+ * trigger a CORS preflight that Apps Script cannot answer — so it is
+ * parsed here rather than read from e.parameter.
+ */
+function overlayApiPost_(e) {
+  let body = {};
+  try {
+    body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+  } catch (err) {
+    return overlayJson_({ ok: false, error: 'Could not read the request body.' });
+  }
+
+  try {
+    overlayCheckToken_((e && e.parameter) || {});
+
+    switch (body.action) {
+      case 'bookMeeting':
+        return overlayJson_(overlayBookMeeting_(body));
+      case 'addNotes':
+        return overlayJson_(overlayAddNotes_(body));
+      default:
+        return overlayJson_({ ok: false, error: 'unknown action: ' + body.action });
+    }
+  } catch (err) {
+    return overlayJson_({ ok: false, error: String(err && err.message ? err.message : err) });
+  }
+}
+
+/**
+ * Books the slot, then writes to Kylas.
+ *
+ * The order matters and is not interchangeable. The calendar write is the
+ * one that can't be retried cheaply — it holds a real slot in real
+ * people's diaries — so it goes first and its result is what the BD is
+ * told. The CRM writes come after and are reported alongside: a deal that
+ * failed to create is a row to fix, while a meeting that failed to book
+ * is a meeting that didn't happen.
+ */
+function overlayBookMeeting_(p) {
+  const booked = bookMeeting(p);
+  if (!booked || booked.ok === false) return booked;
+
+  // Never let a CRM failure turn a booked meeting into an error. The slot
+  // is already held by this point; kylasOnBooked_ collects its own errors
+  // rather than throwing, and they ride back with the success.
+  let crm = { dealId: null, errors: [] };
+  try {
+    crm = kylasOnBooked_({
+      contactId:    p.contactId,
+      ownerId:      p.ownerId,
+      primaryEmail: p.primaryEmail,
+      company:      p.company,
+      callType:     p.callType,
+      notes:        p.notes,
+      deal:         p.deal
+    });
+  } catch (err) {
+    crm.errors = ['CRM: ' + String(err && err.message ? err.message : err)];
+  }
+
+  booked.dealId = crm.dealId || null;
+  booked.crmErrors = crm.errors || [];
+  return booked;
+}
+
+/**
+ * Notes typed into the overlay after the fact, attached to the contact.
+ */
+function overlayAddNotes_(p) {
+  if (!p.contactId) return { ok: false, error: 'No contact to attach the note to.' };
+  if (!p.notes || !String(p.notes).trim()) return { ok: false, error: 'The note is empty.' };
+
+  try {
+    kylasAddNote_('CONTACT', p.contactId, p.notes);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+}
+
 function overlayJson_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
