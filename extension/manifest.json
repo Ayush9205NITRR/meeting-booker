@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kylas Overlay \u2014 Sales Intelligence",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Surfaces curated Airtable company data and one-click meeting booking directly inside Kylas.",
   "permissions": [
     "storage"

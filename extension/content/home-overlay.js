@@ -41,6 +41,16 @@
       .trim();
   }
 
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function shortDate(iso) {
+    const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return "";
+    const [, y, mo, d] = m;
+    const label = Number(d) + " " + (MONTHS[Number(mo) - 1] || "");
+    return y === String(new Date().getFullYear()) ? label : label + " " + y.slice(2);
+  }
+
   function todayStr() {
     const d = new Date();
     const p = (n) => (n < 10 ? "0" + n : "" + n);
@@ -209,16 +219,37 @@
       // An Airtable account row has no contacts attached — it links to
       // the company itself, which is the page a BD wants anyway.
       if (state.accounts) {
-        const pocs = [r.totalPocs && r.totalPocs + " POCs", r.connectedPocs && r.connectedPocs + " connected"]
+        // The stage is the section heading right above these rows, so
+        // repeating it on every line says nothing and crowds out the
+        // company name.
+        const pocs = [
+          r.totalPocs && r.totalPocs + " POC" + (r.totalPocs === "1" ? "" : "s"),
+          r.connectedPocs && r.connectedPocs + " connected",
+        ]
           .filter(Boolean)
           .join(" · ");
+
+        // "Status of Reachout" arrives as e.g. "Stale | Last Call:
+        // 2026-04-17" — two facts in one string, and the date is already
+        // its own column. Split them so the status can be a short pill and
+        // the date can sit where a date belongs.
+        const status = String(r.status || "").split("|")[0].trim();
+        const called = shortDate(r.lastCalledAt);
+
+        // Status leads the meta line rather than sitting in a pill. In a
+        // panel this narrow a pill either shrinks to "St…", which says
+        // nothing, or pushes the company name out — and the status is the
+        // part that decides whether to act, so it must not be the part
+        // that gets cut. POC counts follow, and lose their tail first.
+        const meta = [status, pocs].filter(Boolean).join(" · ");
+
         return `
-          <a class="ko-p" href="/sales/companies/details/${esc(r.id)}">
+          <a class="ko-p ko-acct" href="/sales/companies/details/${esc(r.id)}">
             <span class="ko-who">
               <span class="ko-n2">${esc(r.name)}</span>
-              <span class="ko-l2">${esc([r.stage, pocs].filter(Boolean).join(" · "))}</span>
+              ${meta ? `<span class="ko-l2" title="${esc(meta)}">${esc(meta)}</span>` : ""}
             </span>
-            ${r.status ? `<span class="ko-tag">${esc(r.status)}</span>` : ""}
+            ${called ? `<span class="ko-lastcall">${esc(called)}</span>` : ""}
           </a>`;
       }
 

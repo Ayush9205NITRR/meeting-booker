@@ -1399,3 +1399,53 @@ input[type="text"]:focus {
 .ko-actbar { z-index: 2; }
 
 .ko-go:not(:disabled):hover { background: #000; }
+
+/* ── account rows in the queue ────────────────────────────────────────
+   The status pill had no width limit, so a long one ("Tapped – MQL -
+   Action Needed | Last Call: …") pushed the row wider than the panel and
+   squeezed the company name — which is flex:1, min-width:0 — down to
+   nothing. Names disappeared underneath it. Everything here is about
+   keeping the name the widest thing in the row.                        */
+
+.ko-acct {
+  align-items: center;
+  padding: 10px 12px;
+  gap: 12px;
+  /* Two lines on the left, one on the right, so every row is the same
+     height whether or not an account has a status or a last-call date.
+     Even heights are what let the eye run down the list instead of
+     re-measuring each line. */
+  min-height: 58px;
+  box-sizing: border-box;
+}
+
+.ko-acct .ko-who {
+  /* The name wins any fight for space. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ko-acct .ko-n2 {
+  /* One line, cut cleanly — a wrapped company name makes rows different
+     heights and the list stops scanning as a column. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+
+/* Deliberately not .ko-when — that name is already the booking panel's
+   date/start/length control, and reusing it here made this date inherit
+   a grid, padding and a grey background it never asked for. */
+.ko-lastcall {
+  /* Plain text, no chip. Two grey blobs a row read as noise; the date is
+     a fact, not a label. */
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ko-ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
