@@ -112,6 +112,29 @@ if (fs.existsSync(manifestPath)) {
   }
 }
 
+// Every action the extension asks for must exist in Overlay.gs's router.
+// A missing one answers "unknown action: X" at runtime and the panel just
+// looks broken — which is exactly how `board` went unnoticed: Code.gs had
+// getBoard() all along, but nothing routed to it, so the bookers, the
+// tentative POCs and the reviewers were all empty and nobody could see why.
+{
+  const worker = read('extension/background/service-worker.js');
+  const asked = new Set([
+    ...[...worker.matchAll(/callBackend\(\{\s*action:\s*"([a-zA-Z]+)"/g)].map((m) => m[1]),
+    ...[...worker.matchAll(/postBackend\(\{\s*action:\s*"([a-zA-Z]+)"/g)].map((m) => m[1]),
+  ]);
+  const routed = new Set(
+    [...(sources['Overlay.gs'] || '').matchAll(/case '([a-zA-Z]+)':/g)].map((m) => m[1])
+  );
+
+  const missing = [...asked].filter((a) => !routed.has(a));
+  if (missing.length) {
+    bad('the extension asks for action(s) Overlay.gs does not route: ' + missing.join(', '));
+  } else {
+    ok(asked.size + ' backend actions all have a route');
+  }
+}
+
 // ---------- extension ----------
 console.log('\nExtension');
 const manifest = JSON.parse(read('extension/manifest.json'));

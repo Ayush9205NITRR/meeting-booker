@@ -81,6 +81,21 @@ function overlayApi_(e) {
         return overlayJson_(overlayCompanyContacts_(params.companyId));
       case 'myContacts':
         return overlayJson_(overlayMyContacts_(params.ownerEmail));
+
+      // Calendar availability. These two were the gap behind "unknown
+      // action: board": Code.gs has had getBoard() and findNextSlots() all
+      // along, but index.html reaches them through google.script.run, so
+      // nothing ever exposed them over HTTP. The overlay asks by URL, got
+      // told the action didn't exist, and every piece the board supplies —
+      // the bookers list, the tentative POCs, the reviewers — stayed empty.
+      case 'board':
+        return overlayJson_(getBoard(params.localStart, Number(params.duration) || 30));
+      case 'nextSlots':
+        return overlayJson_({
+          ok: true,
+          slots: findNextSlots(Number(params.duration) || 30, Number(params.count) || 5)
+        });
+
       case 'ping':
         return overlayJson_({ ok: true, pong: true });
       default:
@@ -533,6 +548,10 @@ function overlayContact_(contactId) {
       const full = overlayKylasGet_('/v1/companies/' + encodeURIComponent(companyRef.id));
       company.name = full.name || company.name;
       company.dealValue = overlayPickValue_(full);
+      // Who owns the ACCOUNT, which is not always who owns this one
+      // contact. The invite is about the account, so this is the owner
+      // that belongs on it.
+      company.owner = overlayOwner_(full.ownedBy);
     } catch (e) {
       /* keep the reference-only company */
     }
@@ -560,7 +579,12 @@ function overlayContact_(contactId) {
       name: [c.firstName, c.lastName].filter(String).join(' ').trim() || c.name || '',
       email: overlayPrimaryEmail_(c)
     },
-    owner: overlayOwner_(c.ownedBy),
+    // Both, named for what they are. The overlay prefers the account
+    // owner and falls back to the contact's, rather than silently using
+    // one where the other was meant.
+    owner: (company && company.owner) || overlayOwner_(c.ownedBy),
+    contactOwner: overlayOwner_(c.ownedBy),
+    accountOwner: (company && company.owner) || null,
     company: company,
     companyContacts: companyContacts
   };
