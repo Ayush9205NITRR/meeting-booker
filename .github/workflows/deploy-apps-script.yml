@@ -40,7 +40,6 @@ jobs:
       - name: Check secrets
         id: secrets
         env:
-          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
@@ -69,31 +68,48 @@ jobs:
           echo "Project looks complete:"
           ls -1 apps-script
 
-      # clasp 2 and clasp 3 store credentials differently, and clasp's own
-      # message for the wrong one ("Could not read API credentials") doesn't
-      # say which. Check the shape here so the failure names the fix.
-      - name: Check the credential format
+      # Writes ~/.clasprc.json from the secret.
+      #
+      # It takes everything from the first "{" to the last "}", because the
+      # obvious way to get this value is to copy a terminal window — and
+      # `clasp login` prints "You are logged in as ..." above the file, while
+      # some shells print a trailing "%". Neither is JSON, and clasp's own
+      # error for that ("Could not read API credentials") points at the
+      # token rather than at the stray line. Trimming here costs nothing and
+      # removes the single most likely way this step fails.
+      - name: Write clasp credentials
         if: steps.secrets.outputs.ready == 'true'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
-          # Read from the env rather than a temp file, so the credential never
-          # touches the runner's disk outside the one place clasp needs it.
           node -e '
-            let c;
-            try { c = JSON.parse(process.env.CLASPRC_JSON); }
-            catch (e) { console.log("::error::CLASPRC_JSON is not valid JSON. Copy the whole file, { to }."); process.exit(1); }
-
-            if (c.tokens && c.tokens.default && c.tokens.default.refresh_token) {
-              console.log("Credential format looks right (clasp 3).");
-              process.exit(0);
-            }
-            if (c.token && c.token.refresh_token) {
-              console.log("::error::That is a clasp 2 credential file. Run `npm install -g @google/clasp@3.4.1` then `clasp login --no-localhost` again, and replace the CLASPRC_JSON secret.");
+            const raw = process.env.CLASPRC_JSON || "";
+            const start = raw.indexOf("{");
+            const end = raw.lastIndexOf("}");
+            if (start < 0 || end < start) {
+              console.log("::error::CLASPRC_JSON has no JSON object in it. Paste the contents of ~/.clasprc.json, from { to }.");
               process.exit(1);
             }
-            console.log("::error::CLASPRC_JSON has no refresh_token in it. Re-run `clasp login --no-localhost`, then copy all of ~/.clasprc.json.");
-            process.exit(1);
+            const text = raw.slice(start, end + 1);
+
+            let c;
+            try { c = JSON.parse(text); }
+            catch (e) { console.log("::error::CLASPRC_JSON is not valid JSON: " + e.message); process.exit(1); }
+
+            if (c.token && c.token.refresh_token) {
+              console.log("::error::That is a clasp 2 credential file. Run `npm install -g @google/clasp@3.4.1`, then `clasp login --no-localhost` again, and replace the CLASPRC_JSON secret.");
+              process.exit(1);
+            }
+            if (!(c.tokens && c.tokens.default && c.tokens.default.refresh_token)) {
+              console.log("::error::CLASPRC_JSON has no refresh_token in it. Re-run `clasp login --no-localhost` and copy all of ~/.clasprc.json.");
+              process.exit(1);
+            }
+
+            require("fs").writeFileSync(require("os").homedir() + "/.clasprc.json", text);
+            if (text.length !== raw.length) {
+              console.log("::notice::Trimmed " + (raw.length - text.length) + " characters of non-JSON text around the credential.");
+            }
+            console.log("Credentials written.");
           '
 
       - name: Install clasp
@@ -103,10 +119,8 @@ jobs:
       - name: Push
         if: steps.secrets.outputs.ready == 'true'
         env:
-          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
-          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
           cd apps-script
           printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > .clasp.json
           clasp push --force
