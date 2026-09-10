@@ -189,8 +189,30 @@ jobs:
         run: |
           cd apps-script
           printf '{"scriptId":"%s","rootDir":".","scriptExtensions":["gs","js"]}\n' "$SCRIPT_ID" > .clasp.json
-          clasp push --force
+
+          # clasp prints Google's raw OAuth JSON and exits 1. That tells
+          # whoever is looking at a red build nothing at all, and the token
+          # expiring is not a rare event: Google Workspace can require
+          # reauthentication for sensitive scopes on a schedule, and this
+          # refresh token dies every time it does. So name it.
+          set +e
+          OUT=$(clasp push --force 2>&1)
+          CODE=$?
+          set -e
           rm -f .clasp.json
+          echo "$OUT"
+
+          if [ $CODE -ne 0 ]; then
+            case "$OUT" in
+              *invalid_rapt*|*invalid_grant*|*"Invalid Credentials"*|*"Login is required"*)
+                echo "::error::The clasp credentials in CLASPRC_JSON are no longer valid, so NOTHING was deployed — the live Apps Script still runs the previous version. Google expires this token when Workspace requires reauthentication for sensitive scopes, and revoking the app's access does the same. To fix: run 'clasp login' on your own machine, then copy everything 'cat ~/.clasprc.json' prints into the CLASPRC_JSON repo secret, and re-run this workflow. Do not paste that file into chat or a ticket - it is a live Google credential."
+                ;;
+              *)
+                echo "::error::clasp push failed, so nothing was deployed and the live Apps Script still runs the previous version. The clasp output is above."
+                ;;
+            esac
+            exit $CODE
+          fi
 
       # Updates the EXISTING deployment, so the /exec URL already pasted
       # into every BD's extension popup keeps working. A bare `clasp deploy`
