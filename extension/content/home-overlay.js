@@ -111,20 +111,31 @@
     });
   }
 
+  // The account's own next call date. On the Airtable path the sync has
+  // already rolled it up (earliest contact due on the account); on the
+  // contact fallback it's rolled up here from the contacts in hand.
+  function dueDate(row) {
+    if (state.accounts) return row.nextCallDate || "";
+    if (byAccount) return row.contacts.map((c) => c.nextCallDate).filter(Boolean).sort()[0] || "";
+    return row.nextCallDate || "";
+  }
+
   function inBucket(row, bucket) {
     if (bucket.rule === "neverCalled") return !row.lastCalledAt;
-    if (bucket.rule === "nextCallToday") {
-      // Next call date is a contact field, and Company List doesn't carry
-      // one. Rather than draw a bucket that can never fill, accounts mode
-      // hides it — see hasRule() below.
-      if (state.accounts) return false;
-      return byAccount
-        ? row.contacts.some((c) => c.nextCallDate === todayStr())
-        : row.nextCallDate === todayStr();
+    if (bucket.rule === "nextCallToday") return dueDate(row) === todayStr();
+    // Due today OR already past. A call the BD owed last Tuesday is the
+    // most urgent thing in the queue, and "today only" is precisely how it
+    // disappears — the account drops out of the date bucket and is left
+    // sitting in its stage bucket looking like everything else.
+    if (bucket.rule === "nextCallDue") {
+      const due = dueDate(row);
+      return !!due && due <= todayStr();
     }
     const want = (bucket.stages || []).map(norm);
     return want.indexOf(norm(row.stage)) !== -1;
   }
+
+  const DATE_RULES = ["nextCallToday", "nextCallDue"];
 
   function rows() {
     // Airtable rows are already accounts, with the stage the sync
@@ -138,8 +149,14 @@
   // dropped rather than shown permanently empty — an empty bucket reads
   // as "nothing to do here", which is a different and wrong statement.
   function usableBuckets() {
-    if (!state.accounts) return config;
-    return config.filter((b) => b.rule !== "nextCallToday");
+    // Company List carries the next call date only once kylas-airtable-sync
+    // has written the rollup column. Until then the date buckets can never
+    // fill, and a permanently empty bucket reads as "nothing due today",
+    // which is a different and wrong statement.
+    if (state.accounts && !state.hasNextCall) {
+      return config.filter((b) => DATE_RULES.indexOf(b.rule) === -1);
+    }
+    return config;
   }
 
   function bucketed() {
@@ -243,13 +260,27 @@
         // that gets cut. POC counts follow, and lose their tail first.
         const meta = [status, pocs].filter(Boolean).join(" · ");
 
+        // In a date bucket the date that matters is when the call is DUE,
+        // not when it last happened — and an overdue one has to look
+        // overdue, or the bucket quietly reads as today's work.
+        const due = dueDate(r);
+        const overdue = !!due && due < todayStr();
+        const right = group && DATE_RULES.indexOf(group.rule) !== -1 && due
+          ? `<span class="ko-lastcall${overdue ? " ko-overdue" : ""}"
+                   title="${esc(overdue ? "Overdue since " + due : "Due " + due)}">${esc(
+              overdue ? shortDate(due) : "Today"
+            )}</span>`
+          : called
+            ? `<span class="ko-lastcall">${esc(called)}</span>`
+            : "";
+
         return `
           <a class="ko-p ko-acct" href="/sales/companies/details/${esc(r.id)}">
             <span class="ko-who">
               <span class="ko-n2">${esc(r.name)}</span>
               ${meta ? `<span class="ko-l2" title="${esc(meta)}">${esc(meta)}</span>` : ""}
             </span>
-            ${called ? `<span class="ko-lastcall">${esc(called)}</span>` : ""}
+            ${right}
           </a>`;
       }
 
@@ -260,9 +291,7 @@
             .filter(Boolean)
             .join(" · ")
         : r.company || r.stage || "";
-      const due = byAccount
-        ? r.contacts.map((c) => c.nextCallDate).filter(Boolean).sort()[0]
-        : r.nextCallDate;
+      const due = dueDate(r);
 
       return `
         <a class="ko-p" href="/sales/contacts/details/${esc(first.id)}">
@@ -327,6 +356,7 @@
 
       if (res && res.ok && Array.isArray(res.accounts)) {
         state.accounts = res.accounts;
+        state.hasNextCall = !!res.hasNextCall;
         state.contacts = null;
         state.source = res.source || "airtable";
         state.stale = !!res.stale;
@@ -342,6 +372,7 @@
         if (legacy && legacy.ok) {
           state.contacts = legacy.contacts || [];
           state.accounts = null;
+          state.hasNextCall = false;
           state.source = "kylas";
           state.owner = legacy.owner || null;
           state.error = "";

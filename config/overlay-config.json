@@ -39,17 +39,74 @@
       "Connected": "Connected POCs",
       "MQL": "MQL POCs"
     },
+    "_fields_comment": [
+      "A value may be a column name, a LIST of candidate names (first one",
+      "present on the record wins), or { field, type }. Use a list when you",
+      "aren't sure what the column is called \u2014 a name that matches nothing",
+      "is skipped, so extra candidates cost nothing and a wrong guess costs",
+      "a missing row rather than a broken panel. Click 'Show all fields' at",
+      "the bottom of the overlay to read the real names off a record, then",
+      "trim these lists to the one that's right."
+    ],
     "fields": {
       "Status of reachout": "Status of Reachout",
       "Source of data": "Source of Data",
-      "Funding type": "Latest Funding Type",
-      "Funding amount": "Latest Funding Amount",
+      "Annual revenue": [
+        "Annual Revenue",
+        "Annual Revenue - Apollo",
+        "Revenue",
+        "Estimated Annual Revenue"
+      ],
+      "Employees": [
+        "# Employees",
+        "Employees",
+        "# Employees - Apollo",
+        "Employee Count",
+        "Headcount"
+      ],
+      "Funding stage": [
+        "Funding stage",
+        "Funding Stage",
+        "Latest Funding Stage",
+        "Funding Round"
+      ],
+      "Total funding": [
+        "Total Funding",
+        "Total Funding Amount",
+        "Total Funding Raised"
+      ],
+      "Latest funding amount": [
+        "Latest Funding Amount",
+        "Last Funding Amount"
+      ],
+      "Latest funding type": [
+        "Latest Funding Type",
+        "Last Funding Type"
+      ],
+      "Offsite timeline": [
+        "Offsite Timeline",
+        "Offsite Timeline (BD - New)",
+        "Offsite Timeline (BD)"
+      ],
+      "Boolean post": {
+        "field": [
+          "Boolean Post link - kylas",
+          "Boolean Post Link - Kylas",
+          "Boolean Post link",
+          "Boolean Post Link"
+        ],
+        "type": "link"
+      },
       "Website": {
         "field": "Website",
         "type": "link"
       },
       "LinkedIn": {
-        "field": "linkedin - Appollo",
+        "field": [
+          "linkedin - Appollo",
+          "LinkedIn - Apollo",
+          "LinkedIn"
+        ],
         "type": "link"
       }
     },
@@ -104,8 +161,9 @@
       {
         "id": "today",
         "label": "Connect today",
-        "hint": "Next call date is today",
-        "rule": "nextCallToday",
+        "hint": "Due today, or overdue",
+        "rule": "nextCallDue",
+        "_rule_comment": "\"nextCallDue\" = the account's next call date is today or already past. Use \"nextCallToday\" instead for today only \u2014 but then a call you missed last week shows up nowhere by date.",
         "accent": true
       }
     ],
@@ -150,12 +208,22 @@
       "ownerEmail": "Owner Email",
       "stage": "Account Pipeline Stage",
       "lastCalled": "Last Called At (Contacts)",
+      "nextCall": "Next Call Date (Contacts)",
       "status": "Status of Reachout",
       "accountStatus": "Account Status",
       "totalPocs": "Total POCs",
       "connectedPocs": "Connected POCs",
       "mqlPocs": "MQL POCs"
     },
-    "_accountColumns_comment": "Which Company List columns the queue reads. Names come from kylas-airtable-sync's config/field_map.json \u2014 rename a column in Airtable and change it here, no extension release needed."
+    "_accountColumns_comment": "Which Company List columns the queue reads. Names come from kylas-airtable-sync's config/field_map.json \u2014 rename a column in Airtable and change it here, no extension release needed.",
+    "_nextCall_comment": [
+      "\"nextCall\" is OPTIONAL and is the one column the queue can start without.",
+      "Next Call Date lives on the CONTACT in Kylas; kylas-airtable-sync's",
+      "account-health module rolls it up onto the company as the EARLIEST date",
+      "any of its contacts is due, and writes it here. Until that sync has run,",
+      "the column doesn't exist \u2014 Airtable 422s the whole request for one",
+      "unknown field, so the extension retries without it and hides the",
+      "\"Connect today\" bucket rather than showing it permanently empty."
+    ]
   }
 }

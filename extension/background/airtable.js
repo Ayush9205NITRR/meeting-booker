@@ -178,6 +178,7 @@ const ACCOUNT_COLUMNS = {
   ownerEmail: "Owner Email",
   stage: "Account Pipeline Stage",
   lastCalled: "Last Called At (Contacts)",
+  nextCall: "Next Call Date (Contacts)",
   status: "Status of Reachout",
   accountStatus: "Account Status",
   totalPocs: "Total POCs",
@@ -196,6 +197,14 @@ function accountFilterFormula(columns, ownerEmail) {
  * Every account owned by one BD. Returns null when no token is set, so
  * the caller can fall back the same way the company lookup does.
  */
+// Columns the queue can do without. `Next Call Date (Contacts)` is written
+// by kylas-airtable-sync's account-health rollup, so between the extension
+// shipping and that sync running it simply isn't there — and Airtable 422s
+// the WHOLE request for one unknown fields[] entry. Asking for it and
+// retrying without it means the queue keeps working through that gap
+// instead of going dark for everyone at once.
+const OPTIONAL_ACCOUNT_COLUMNS = ["nextCall"];
+
 async function airtableMyAccounts(ownerEmail, columnOverrides) {
   const { pat, baseId, table } = await airtableSettings();
   if (!pat) return null;
@@ -204,8 +213,27 @@ async function airtableMyAccounts(ownerEmail, columnOverrides) {
   }
 
   const columns = Object.assign({}, ACCOUNT_COLUMNS, columnOverrides || {});
-  const wanted = [...new Set(Object.values(columns))];
 
+  let out = await fetchAccountPages(columns, { pat, baseId, table }, ownerEmail);
+
+  if (out.rejected && OPTIONAL_ACCOUNT_COLUMNS.some((k) => columns[k])) {
+    const trimmed = Object.assign({}, columns);
+    OPTIONAL_ACCOUNT_COLUMNS.forEach((k) => delete trimmed[k]);
+    const retry = await fetchAccountPages(trimmed, { pat, baseId, table }, ownerEmail);
+    // Only the second answer counts. If dropping the optional columns fixed
+    // it, the missing column was the problem; if not, report the original
+    // error, which names every column the queue asked for.
+    if (!retry.rejected) return retry.result;
+  }
+
+  return out.result;
+}
+
+// One paged read. Returns { result, rejected } — `rejected` marks the 422
+// that airtableMyAccounts retries, so it can tell "unknown column" apart
+// from every other failure without parsing the message back out.
+async function fetchAccountPages(columns, { pat, baseId, table }, ownerEmail) {
+  const wanted = [...new Set(Object.values(columns))];
   const rows = [];
   let offset = "";
 
@@ -226,23 +254,31 @@ async function airtableMyAccounts(ownerEmail, columnOverrides) {
     try {
       res = await fetch(url, { headers: { Authorization: `Bearer ${pat}` } });
     } catch (err) {
-      return { ok: false, error: `Could not reach Airtable: ${err}` };
+      return { result: { ok: false, error: `Could not reach Airtable: ${err}` } };
     }
 
     if (res.status === 401 || res.status === 403) {
-      return { ok: false, error: "Airtable rejected the token. Check the PAT in the extension popup." };
+      return {
+        result: {
+          ok: false,
+          error: "Airtable rejected the token. Check the PAT in the extension popup.",
+        },
+      };
     }
     if (res.status === 422) {
       // Almost always a renamed column: the formula or a fields[] entry
       // names something that no longer exists.
       return {
-        ok: false,
-        error:
-          "Airtable rejected the query — usually a renamed column. Expected: " +
-          wanted.join(", "),
+        rejected: true,
+        result: {
+          ok: false,
+          error:
+            "Airtable rejected the query — usually a renamed column. Expected: " +
+            wanted.join(", "),
+        },
       };
     }
-    if (!res.ok) return { ok: false, error: `Airtable returned ${res.status}.` };
+    if (!res.ok) return { result: { ok: false, error: `Airtable returned ${res.status}.` } };
 
     const body = await res.json();
     (body.records || []).forEach((r) => {
@@ -253,6 +289,7 @@ async function airtableMyAccounts(ownerEmail, columnOverrides) {
         owner: f[columns.owner] || "",
         stage: f[columns.stage] || "",
         lastCalledAt: f[columns.lastCalled] || "",
+        nextCallDate: (columns.nextCall && f[columns.nextCall]) || "",
         status: f[columns.status] || "",
         accountStatus: f[columns.accountStatus] || "",
         totalPocs: f[columns.totalPocs] || "",
@@ -265,5 +302,7 @@ async function airtableMyAccounts(ownerEmail, columnOverrides) {
     if (!offset) break;
   }
 
-  return { ok: true, source: "airtable", accounts: rows };
+  // Whether the next-call column made it into this read decides whether the
+  // "Connect today" bucket can be drawn at all — see usableBuckets().
+  return { result: { ok: true, source: "airtable", accounts: rows, hasNextCall: !!columns.nextCall } };
 }

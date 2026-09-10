@@ -318,18 +318,33 @@ async function handleRequest(action, payload) {
     // well within the working day.
     case "getMyAccounts": {
       const key = "accounts:" + (payload.ownerEmail || "");
-      const cached = await chrome.storage.local.get([key, key + ":at"]);
+      // hasNextCall is cached alongside the rows: whether the next-call
+      // column exists decides whether the "Connect today" bucket is drawn,
+      // and a cache hit that dropped the flag would make the bucket flicker
+      // in and out between reads.
+      const cached = await chrome.storage.local.get([key, key + ":at", key + ":nc"]);
       const fresh = cached[key] && Date.now() - (cached[key + ":at"] || 0) < 30 * 60 * 1000;
-      if (fresh) return { ok: true, source: "cache", accounts: cached[key] };
+      if (fresh) {
+        return { ok: true, source: "cache", accounts: cached[key], hasNextCall: !!cached[key + ":nc"] };
+      }
 
       const remote = queueColumnsFrom(await cachedRemoteConfig());
       const direct = await airtableMyAccounts(payload.ownerEmail, remote);
       if (direct && direct.ok) {
-        await chrome.storage.local.set({ [key]: direct.accounts, [key + ":at"]: Date.now() });
+        await chrome.storage.local.set({
+          [key]: direct.accounts,
+          [key + ":at"]: Date.now(),
+          [key + ":nc"]: !!direct.hasNextCall,
+        });
         return direct;
       }
       // A stale list beats an empty queue while Airtable is unreachable.
-      if (cached[key]) return { ok: true, source: "cache", stale: true, accounts: cached[key] };
+      if (cached[key]) {
+        return {
+          ok: true, source: "cache", stale: true,
+          accounts: cached[key], hasNextCall: !!cached[key + ":nc"],
+        };
+      }
       if (direct) return direct;
       return {
         ok: false,

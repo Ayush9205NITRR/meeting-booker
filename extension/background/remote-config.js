@@ -62,9 +62,14 @@ function companyLayoutFrom(config) {
   const company = config && config.company;
   if (!company) return null;
 
+  // An entry is "Column", ["First choice", "Fallback"], or { field, type }
+  // where field is either of those. The array form has to pass through
+  // whole: reading .field off it yields undefined, which drops the row.
   const toList = (obj) =>
     Object.entries(obj || {}).map(([label, entry]) => {
-      if (typeof entry === "string") return { label, column: entry, type: "text" };
+      if (typeof entry === "string" || Array.isArray(entry)) {
+        return { label, column: entry, type: "text" };
+      }
       return { label, column: entry.field, type: entry.type || "text" };
     });
 

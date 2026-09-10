@@ -37,13 +37,51 @@ window.KylasOverlayConfig = {
     },
 
     // The main list, in this order.
+    // A value is a column name, a LIST of candidates (the first one present
+    // on the record wins), or { field, type }. Lists exist because the same
+    // fact is spelled differently depending on how the column was made; a
+    // candidate that matches nothing is skipped, so extra ones are free.
     fields: {
       "Status of reachout": "Status of Reachout",
       "Source of data": "Source of Data",
-      "Funding type": "Latest Funding Type",
-      "Funding amount": "Latest Funding Amount",
+      "Annual revenue": [
+        "Annual Revenue",
+        "Annual Revenue - Apollo",
+        "Revenue",
+        "Estimated Annual Revenue",
+      ],
+      Employees: [
+        "# Employees",
+        "Employees",
+        "# Employees - Apollo",
+        "Employee Count",
+        "Headcount",
+      ],
+      "Funding stage": [
+        "Funding stage",
+        "Funding Stage",
+        "Latest Funding Stage",
+        "Funding Round",
+      ],
+      "Total funding": ["Total Funding", "Total Funding Amount", "Total Funding Raised"],
+      "Latest funding amount": ["Latest Funding Amount", "Last Funding Amount"],
+      "Latest funding type": ["Latest Funding Type", "Last Funding Type"],
+      "Offsite timeline": [
+        "Offsite Timeline",
+        "Offsite Timeline (BD - New)",
+        "Offsite Timeline (BD)",
+      ],
+      "Boolean post": {
+        field: [
+          "Boolean Post link - kylas",
+          "Boolean Post Link - Kylas",
+          "Boolean Post link",
+          "Boolean Post Link",
+        ],
+        type: "link",
+      },
       Website: { field: "Website", type: "link" },
-      LinkedIn: { field: "linkedin - Appollo", type: "link" },
+      LinkedIn: { field: ["linkedin - Appollo", "LinkedIn - Apollo", "LinkedIn"], type: "link" },
     },
 
     notes: {},

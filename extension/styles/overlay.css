@@ -1449,3 +1449,11 @@ input[type="text"]:focus {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+/* An overdue call has to look different from a date, or the "Connect
+   today" bucket reads as today's work when half of it is last week's.
+   Same weight as the surrounding text — this is emphasis, not an alarm. */
+.ko-lastcall.ko-overdue {
+  color: #a82a20;
+  font-weight: 600;
+}

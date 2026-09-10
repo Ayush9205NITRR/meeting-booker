@@ -14,10 +14,30 @@
 
   let currentFields = {};
 
-  // A field-map entry is either "Column Name" or { field, type }.
+  // A field-map entry is either "Column Name", ["First choice", "Fallback"],
+  // or { field, type } where field is either of those.
   function resolve(entry) {
-    if (typeof entry === "string") return { field: entry, type: "text" };
+    if (typeof entry === "string" || Array.isArray(entry)) return { field: entry, type: "text" };
     return { field: entry.field, type: entry.type || "text" };
+  }
+
+  // Which real column a layout row reads. `column` may be a list, because
+  // the same fact lives under different names depending on when and how the
+  // Airtable column was made ("# Employees" vs "Employees", "Annual
+  // Revenue" vs "Revenue"). Prefer a candidate that actually carries a
+  // value; fall back to one that merely exists so a genuinely blank field
+  // still shows "—"; return null when none of them is on the record, which
+  // drops the row.
+  function pickColumn(fields, column) {
+    const list = Array.isArray(column) ? column : [column];
+    let present = null;
+    for (const name of list) {
+      if (!(name in fields)) continue;
+      if (present === null) present = name;
+      const v = fields[name];
+      if (v != null && String(v).trim()) return name;
+    }
+    return present;
   }
 
   // Header columns accept a list of candidates, first non-empty wins.
@@ -81,7 +101,7 @@
 
   function badgesHtml(fields, layout) {
     const badges = (layout.badges || [])
-      .map((item) => fields[item.column])
+      .map((item) => fields[pickColumn(fields, item.column)])
       .filter((v) => v != null && String(v).trim())
       .map((v) => `<span class="ko-badge">${KylasOverlay.escapeHtml(v)}</span>`)
       .join("");
@@ -92,7 +112,7 @@
   function statsHtml(fields, layout) {
     const tiles = (layout.stats || [])
       .map((item) => {
-        const raw = fields[item.column];
+        const raw = fields[pickColumn(fields, item.column)];
         if (raw == null || String(raw).trim() === "") return "";
         return `
           <div class="ko-stat">
@@ -111,9 +131,9 @@
       // data — drop the row entirely rather than filling the panel with
       // dashes. A column that exists but is blank still shows "—", because
       // "never called" is worth seeing.
-      .filter((item) => item.column in fields)
+      .filter((item) => pickColumn(fields, item.column) !== null)
       .map((item) => {
-        const value = fields[item.column];
+        const value = fields[pickColumn(fields, item.column)];
         const hasValue = value != null && String(value).trim();
         const copy = hasValue
           ? `<button class="ko-copy" data-value="${KylasOverlay.escapeHtml(value)}" title="Copy">⧉</button>`
@@ -131,7 +151,7 @@
   function notesHtml(fields, layout) {
     return (layout.notes || [])
       .map((item) => {
-        const value = fields[item.column];
+        const value = fields[pickColumn(fields, item.column)];
         if (!value || !String(value).trim()) return "";
         return `
           <div class="ko-note">

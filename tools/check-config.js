@@ -45,17 +45,35 @@ if (!company || typeof company !== 'object') {
       bad(`company.${section} must be an object of "Label": "Column"`);
       continue;
     }
+    // A column is a name, or a list of candidate names — the overlay takes
+    // the first one present on the record, so an uncertain column can be
+    // spelled several ways without breaking the panel.
+    const checkColumn = (where, column) => {
+      if (Array.isArray(column)) {
+        if (!column.length) return bad(`${where} is an empty list of column names`);
+        column.forEach((c, i) => {
+          if (typeof c !== 'string' || !c.trim()) bad(`${where}[${i}] is not a column name`);
+        });
+        return;
+      }
+      if (typeof column !== 'string' || !column.trim()) {
+        bad(`${where} is not a column name`);
+      }
+    };
+
     for (const [label, entry] of Object.entries(group)) {
       entries++;
-      if (typeof entry === 'string') {
-        if (!entry.trim()) bad(`company.${section}["${label}"] is an empty column name`);
+      const where = `company.${section}["${label}"]`;
+      if (typeof entry === 'string' || Array.isArray(entry)) {
+        checkColumn(where, entry);
       } else if (entry && typeof entry === 'object') {
-        if (!entry.field) bad(`company.${section}["${label}"] has no "field"`);
+        if (!entry.field) bad(`${where} has no "field"`);
+        else checkColumn(`${where}.field`, entry.field);
         if (entry.type && !TYPES.has(entry.type)) {
-          bad(`company.${section}["${label}"] type "${entry.type}" is not one of ${[...TYPES].join(', ')}`);
+          bad(`${where} type "${entry.type}" is not one of ${[...TYPES].join(', ')}`);
         }
       } else {
-        bad(`company.${section}["${label}"] must be a column name or { field, type }`);
+        bad(`${where} must be a column name, a list of candidates, or { field, type }`);
       }
     }
   }
@@ -72,7 +90,7 @@ const buckets = config.queue && config.queue.buckets;
 if (!Array.isArray(buckets) || !buckets.length) {
   bad('queue.buckets is empty — the home-page queue would have nothing to show');
 } else {
-  const RULES = new Set(['neverCalled', 'nextCallToday']);
+  const RULES = new Set(['neverCalled', 'nextCallToday', 'nextCallDue']);
   const seen = new Set();
   for (const b of buckets) {
     if (!b.id) { bad('a bucket has no id'); continue; }

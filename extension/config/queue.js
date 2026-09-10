@@ -112,9 +112,12 @@ window.KylasQueueConfig = {
     {
       id: "today",
       label: "Connect today",
-      hint: "Next call date is today",
-      // Also derived: a date comparison, not a stage.
-      rule: "nextCallToday",
+      hint: "Due today, or overdue",
+      // Also derived: a date comparison, not a stage. "nextCallDue" is
+      // today OR earlier — a call missed last week is the most urgent
+      // thing here, and "today only" is how it disappears. Use
+      // "nextCallToday" for a strict today-only bucket.
+      rule: "nextCallDue",
       accent: true,
     },
   ],
