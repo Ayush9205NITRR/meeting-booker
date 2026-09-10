@@ -94,6 +94,13 @@ jobs:
           fi
 
           printf '%s' "$CRX_PRIVATE_KEY" > key.pem
+
+          # A PEM pasted into a GitHub secret can arrive with its line
+          # breaks stripped. The key is fine — OpenSSL just won't decode
+          # it, and Chrome won't pack with it. Normalise the file once,
+          # here, so both this and --pack-extension below read it.
+          node tools/crx-id.js key.pem --fix-key > /dev/null
+
           EXT_ID=$(node tools/crx-id.js key.pem)
           # GitHub Pages hosts are lowercase; the owner login may not be.
           OWNER=$(echo "${{ github.repository_owner }}" | tr 'A-Z' 'a-z')

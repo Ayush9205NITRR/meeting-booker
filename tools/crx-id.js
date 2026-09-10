@@ -21,12 +21,66 @@ if (!keyPath) {
   process.exit(1);
 }
 
-const der = crypto
-  .createPublicKey(fs.readFileSync(keyPath))
-  .export({ type: 'spki', format: 'der' });
+// A PEM pasted into a GitHub secret often arrives with its line breaks
+// gone — some clipboards and terminals flatten it. The key material is
+// identical, but OpenSSL will not decode it, and what reaches the build
+// log is `DECODER routines::unsupported` and a stack trace, which says
+// nothing about what to do. Re-wrap it and carry on; a key that is
+// genuinely wrong still fails below, with a sentence that names the fix.
+function rewrapPem(text) {
+  const m = text.match(/-----BEGIN ([A-Z ]+)-----([\s\S]*?)-----END \1-----/);
+  if (!m) return null;
+  const body = m[2].replace(/\s+/g, '');
+  if (!body) return null;
+  const lines = body.match(/.{1,64}/g) || [];
+  return `-----BEGIN ${m[1]}-----\n${lines.join('\n')}\n-----END ${m[1]}-----\n`;
+}
+
+const raw = fs.readFileSync(keyPath, 'utf8');
+
+let publicKey;
+try {
+  publicKey = crypto.createPublicKey(raw);
+} catch (first) {
+  const repaired = rewrapPem(raw);
+  if (repaired && repaired !== raw) {
+    try {
+      publicKey = crypto.createPublicKey(repaired);
+      console.error('note: the key had no line breaks; re-wrapped it to read it. ' +
+                    'Worth re-pasting the secret from the .pem file so this stops happening.');
+    } catch (second) { /* fall through to the message below */ }
+  }
+  if (!publicKey) {
+    const has = /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(raw);
+    console.error(
+      'Could not read a private key from ' + keyPath + '.\n' +
+      (has
+        ? 'It has the right header, so the contents are damaged — usually a partial\n' +
+          'copy. Re-paste the WHOLE file, BEGIN and END lines included.'
+        : 'There is no "-----BEGIN ... PRIVATE KEY-----" line in it (' +
+          raw.trim().length + ' characters). Generate one with:\n' +
+          '  openssl genrsa 2048 > kylas-overlay.pem\n' +
+          'and paste the entire file into the CRX_PRIVATE_KEY secret.') +
+      '\nOpenSSL said: ' + first.message);
+    process.exit(1);
+  }
+}
+
+const der = publicKey.export({ type: 'spki', format: 'der' });
 
 const hash = crypto.createHash('sha256').update(der).digest('hex').slice(0, 32);
 const id = [...hash].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('');
 
-if (process.argv[3] === '--der-base64') console.log(der.toString('base64'));
+// `--fix-key` rewrites the file in canonical PEM form. Chrome reads the
+// key off disk to pack the CRX, so repairing it only inside this process
+// would leave the pack step failing on the same flattened file.
+if (process.argv.includes('--fix-key')) {
+  const canonical = rewrapPem(raw);
+  if (canonical && canonical !== raw) {
+    fs.writeFileSync(keyPath, canonical);
+    console.error('note: rewrote ' + keyPath + ' with proper line breaks.');
+  }
+}
+
+if (process.argv.includes('--der-base64')) console.log(der.toString('base64'));
 else console.log(id);
