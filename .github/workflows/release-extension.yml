@@ -29,6 +29,8 @@ on:
     paths:
       - "extension/**"
       - ".github/workflows/release-extension.yml"
+      # The signing step runs this, so a change to it changes what ships.
+      - "tools/crx-id.js"
   workflow_dispatch:
 
 permissions:
