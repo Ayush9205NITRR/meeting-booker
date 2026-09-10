@@ -17,16 +17,36 @@
 
 const TZ = 'Asia/Kolkata';
 
+// Everyone who may book. Kept in step with kylas-airtable-sync's
+// config/team.json `bd_team` — that roster is what the rest of the
+// business treats as "the BD team", so a name on it that is missing
+// here is a BD who gets told they aren't allowed to book.
+//
+// shreya@enout.in and shreya.bodwal@enout.in are both listed on
+// purpose: the second is the one on the roster, the first was already
+// here, and nobody could say which is current. An extra address costs
+// nothing; a missing one locks someone out.
 const BOOKERS = [
-  'arshdeep@enout.in',
-  'muskan@enout.in',
-  'anjali.athya@enout.in',
   'aditi.saini@enout.in',
-  'gurnoor@enout.in',
+  'anjali.athya@enout.in',
+  'arshdeep@enout.in',
+  'ayush@enout.in',
   'bhaumik@enout.in',
-  'shreya@enout.in',
+  'devansh.shukla@enout.in',
+  'gaurav@enout.in',
+  'gurnoor@enout.in',
+  'hisham@enout.in',
+  'ife.malpani@enout.in',
+  'keshav@enout.in',
   'mayra@enout.in',
-  'sejal.agarwal@enout.in'
+  'muskan@enout.in',
+  'rashid@enout.in',
+  'rubal@enout.in',
+  'saahil@enout.in',
+  'sejal.agarwal@enout.in',
+  'shreya.bodwal@enout.in',
+  'shreya@enout.in',
+  'tanay.kumar@enout.in'
 ];
 
 // ORDER MATTERS. This is the hierarchy. When more than one person is
@@ -527,9 +547,17 @@ function bookMeeting(payload) {
 // ============ 7. DIAGNOSTIC — run once from the editor ============
 
 function checkAccess() {
-  const rows = PLAYERS.map(function (x, i) {
+  // BOOKERS first, because they are the ones this actually gates. A booker
+  // whose calendar the script cannot write to still books fine — but the
+  // meeting comes out organised by the script account instead of them, and
+  // that is the difference between "I can move my own meeting" and "I have
+  // to ask Ayush". Worth knowing for the whole team BEFORE rollout rather
+  // than one confused BD at a time.
+  const rows = BOOKERS.map(function (e) {
+    return { who: e.split('@')[0], email: e, role: 'booker' };
+  }).concat(PLAYERS.map(function (x, i) {
     return { who: x.name, email: x.email, role: 'player #' + (i + 1) };
-  }).concat(REVIEWERS.map(function (x) {
+  })).concat(REVIEWERS.map(function (x) {
     return { who: x.name, email: x.email, role: 'reviewer' };
   }));
 
@@ -539,23 +567,46 @@ function checkAccess() {
   Logger.log('Script runs as: ' + scriptAccount_());
   Logger.log('Assignment mode: ' + ASSIGNMENT);
   Logger.log('');
-  Logger.log(pad_('WHO', 14) + pad_('ROLE', 12) + pad_('READ', 22) + 'WRITE');
+  Logger.log(pad_('WHO', 18) + pad_('ROLE', 12) + pad_('READ', 22) + 'WRITE');
   Logger.log('---------------------------------------------------------------------------');
+  const cannotOrganise = [];
   rows.forEach(function (r) {
     const c = (fb.calendars || {})[r.email] || {};
     const read = (c.errors || []).length ? 'BLOCKED (' + (c.errors[0].reason || '?') + ')' : 'ok';
     let write;
+    let writable = false;
     try {
       const role = Calendar.CalendarList.get(r.email).accessRole;
-      write = (role === 'writer' || role === 'owner') ? 'ok' : 'no (' + role + ')';
+      writable = (role === 'writer' || role === 'owner');
+      write = writable ? 'ok' : 'no (' + role + ')';
     } catch (e) { write = 'no (not in the calendar list)'; }
-    Logger.log(pad_(r.who, 14) + pad_(r.role, 12) + pad_(read, 22) + write);
+    if (r.role === 'booker' && !writable && r.email !== scriptAccount_()) {
+      cannotOrganise.push(r.email);
+    }
+    Logger.log(pad_(r.who, 18) + pad_(r.role, 12) + pad_(read, 22) + write);
   });
 
   Logger.log('');
   Logger.log('READ no  — that person just shows NO ACCESS in the list. Still bookable.');
-  Logger.log('WRITE no — the invite is sent instead of written; slot holds once accepted.');
+  Logger.log('WRITE no — for a PLAYER or REVIEWER: the invite is sent instead of');
+  Logger.log('           written; the slot holds once they accept. Harmless.');
+  Logger.log('           for a BOOKER: their meetings get organised by ' + scriptAccount_());
+  Logger.log('           instead of by them, so they cannot manage their own invite.');
   Logger.log('Neither one ever stops a booking.');
+
+  if (cannotOrganise.length) {
+    Logger.log('');
+    Logger.log('=== ' + cannotOrganise.length + ' of ' + BOOKERS.length +
+               ' bookers cannot organise their own meetings ===');
+    cannotOrganise.forEach(function (e) { Logger.log('  ' + e); });
+    Logger.log('');
+    Logger.log('Each of them, once: Google Calendar -> Settings -> their calendar ->');
+    Logger.log('"Share with specific people" -> add ' + scriptAccount_() +
+               ' with "Make changes to events".');
+  } else {
+    Logger.log('');
+    Logger.log('All ' + BOOKERS.length + ' bookers can organise their own meetings.');
+  }
 }
 
 function pad_(s, n) {
