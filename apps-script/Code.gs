@@ -181,6 +181,31 @@ function freeBusy_(emails, from, to) {
   });
 }
 
+// Google answers a large freeBusy query with `tooManyCalendarsRequested`
+// against SOME of the calendars — the rest come back fine, so the failure
+// reads as "these particular people are unreachable" when the truth is
+// "you asked about too many at once". Only checkAccess is big enough to hit
+// this (30 calendars); booking asks about one. Chunking keeps the answer
+// about the people rather than about the request.
+function freeBusyChunked_(emails, from, to, size) {
+  const step = size || 10;
+  const calendars = {};
+  for (let i = 0; i < emails.length; i += step) {
+    const batch = emails.slice(i, i + step);
+    try {
+      const part = freeBusy_(batch, from, to).calendars || {};
+      Object.keys(part).forEach(function (k) { calendars[k] = part[k]; });
+    } catch (err) {
+      // A whole batch failing is itself worth reporting per person, rather
+      // than silently leaving them out of the table.
+      batch.forEach(function (e) {
+        calendars[e] = { errors: [{ reason: 'query failed: ' + err.message }] };
+      });
+    }
+  }
+  return { calendars: calendars };
+}
+
 function scriptAccount_() {
   try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; }
 }
@@ -562,48 +587,76 @@ function checkAccess() {
   }));
 
   const now = new Date();
-  const fb = freeBusy_(rows.map(function (r) { return r.email; }), now, new Date(now.getTime() + 3600000));
+  const fb = freeBusyChunked_(
+    rows.map(function (r) { return r.email; }), now, new Date(now.getTime() + 3600000));
 
-  Logger.log('Script runs as: ' + scriptAccount_());
+  const acct = scriptAccount_();
+  Logger.log('Script runs as: ' + acct);
   Logger.log('Assignment mode: ' + ASSIGNMENT);
   Logger.log('');
-  Logger.log(pad_('WHO', 18) + pad_('ROLE', 12) + pad_('READ', 22) + 'WRITE');
+  Logger.log(pad_('WHO', 18) + pad_('ROLE', 12) + pad_('READ', 24) + 'WRITE');
   Logger.log('---------------------------------------------------------------------------');
-  const cannotOrganise = [];
+
+  const needsShare = [];   // real calendar, just hasn't shared it
+  const noCalendar = [];   // Google doesn't know this address at all
+
   rows.forEach(function (r) {
     const c = (fb.calendars || {})[r.email] || {};
-    const read = (c.errors || []).length ? 'BLOCKED (' + (c.errors[0].reason || '?') + ')' : 'ok';
-    let write;
-    let writable = false;
+    const errs = c.errors || [];
+    const reason = errs.length ? String(errs[0].reason || '?') : '';
+    const read = errs.length ? 'BLOCKED (' + reason + ')' : 'ok';
+
+    let write, writable = false;
     try {
       const role = Calendar.CalendarList.get(r.email).accessRole;
       writable = (role === 'writer' || role === 'owner');
       write = writable ? 'ok' : 'no (' + role + ')';
-    } catch (e) { write = 'no (not in the calendar list)'; }
-    if (r.role === 'booker' && !writable && r.email !== scriptAccount_()) {
-      cannotOrganise.push(r.email);
+    } catch (e) { write = 'no (not shared)'; }
+
+    if (r.role === 'booker' && !writable && r.email !== acct) {
+      // notFound from freeBusy means Google has no calendar at this
+      // address. Telling that person to "share their calendar" is advice
+      // they cannot follow — the address itself is the problem, and it is
+      // a different fix: correct it, or take them off BOOKERS.
+      if (reason === 'notFound') noCalendar.push(r.email);
+      else needsShare.push(r.email);
     }
-    Logger.log(pad_(r.who, 18) + pad_(r.role, 12) + pad_(read, 22) + write);
+    Logger.log(pad_(r.who, 18) + pad_(r.role, 12) + pad_(read, 24) + write);
   });
 
   Logger.log('');
   Logger.log('READ no  — that person just shows NO ACCESS in the list. Still bookable.');
   Logger.log('WRITE no — for a PLAYER or REVIEWER: the invite is sent instead of');
   Logger.log('           written; the slot holds once they accept. Harmless.');
-  Logger.log('           for a BOOKER: their meetings get organised by ' + scriptAccount_());
-  Logger.log('           instead of by them, so they cannot manage their own invite.');
+  Logger.log('           for a BOOKER: their meetings get organised by ' + acct);
+  Logger.log('           instead of by them, so they do not own their own call.');
   Logger.log('Neither one ever stops a booking.');
 
-  if (cannotOrganise.length) {
+  if (needsShare.length) {
     Logger.log('');
-    Logger.log('=== ' + cannotOrganise.length + ' of ' + BOOKERS.length +
-               ' bookers cannot organise their own meetings ===');
-    cannotOrganise.forEach(function (e) { Logger.log('  ' + e); });
+    Logger.log('=== ' + needsShare.length + ' need to share their calendar ===');
+    needsShare.forEach(function (e) { Logger.log('  ' + e); });
     Logger.log('');
     Logger.log('Each of them, once: Google Calendar -> Settings -> their calendar ->');
-    Logger.log('"Share with specific people" -> add ' + scriptAccount_() +
+    Logger.log('"Share with specific people" -> add ' + acct +
                ' with "Make changes to events".');
-  } else {
+  }
+
+  if (noCalendar.length) {
+    Logger.log('');
+    Logger.log('=== ' + noCalendar.length + ' addresses Google has no calendar for ===');
+    noCalendar.forEach(function (e) { Logger.log('  ' + e); });
+    Logger.log('');
+    Logger.log('These are NOT people who forgot to share — Google says the address');
+    Logger.log('does not exist. Usually a typo, a person who has left, or a Kylas');
+    Logger.log('login that was never a Google account. Sending them sharing');
+    Logger.log('instructions will not work.');
+    Logger.log('Fix the address in BOOKERS (apps-script/Code.gs) or remove it, and');
+    Logger.log('check config/team.json in kylas-airtable-sync says the same thing.');
+    Logger.log('Until then their bookings stay organised by ' + acct + '.');
+  }
+
+  if (!needsShare.length && !noCalendar.length) {
     Logger.log('');
     Logger.log('All ' + BOOKERS.length + ' bookers can organise their own meetings.');
   }
