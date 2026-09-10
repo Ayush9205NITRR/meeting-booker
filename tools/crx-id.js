@@ -103,14 +103,29 @@ const der = publicKey.export({ type: 'spki', format: 'der' });
 const hash = crypto.createHash('sha256').update(der).digest('hex').slice(0, 32);
 const id = [...hash].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('');
 
-// `--fix-key` rewrites the file in canonical PEM form. Chrome reads the
-// key off disk to pack the CRX, so repairing it only inside this process
-// would leave the pack step failing on the same flattened file.
+// `--fix-key` rewrites the file as canonical PKCS#8. Chrome reads the key
+// off disk to pack the CRX and accepts ONLY PKCS#8 — "Input value for
+// private key must be a valid format (PKCS#8-format PEM-encoded RSA key)"
+// is what it says otherwise. Node is happy with PKCS#1, so a key that
+// works everywhere else in this script still fails the pack step.
+//
+// macOS is where this bites: it ships LibreSSL, whose `openssl genrsa`
+// writes PKCS#1 ("BEGIN RSA PRIVATE KEY"). OpenSSL 3 on Linux writes
+// PKCS#8. Same key either way — only the envelope differs, and the
+// extension ID comes from the public half, so converting cannot change it.
 if (process.argv.includes('--fix-key')) {
-  const canonical = rewrapPem(raw);
-  if (canonical && canonical !== raw) {
-    fs.writeFileSync(keyPath, canonical);
-    console.error('note: rewrote ' + keyPath + ' with proper line breaks.');
+  const source = (() => {
+    try { crypto.createPrivateKey(raw); return raw; } catch (e) { return rewrapPem(raw); }
+  })();
+
+  if (source) {
+    const pkcs8 = crypto
+      .createPrivateKey(source)
+      .export({ type: 'pkcs8', format: 'pem' });
+    if (pkcs8 !== raw) {
+      fs.writeFileSync(keyPath, pkcs8);
+      console.error('note: rewrote ' + keyPath + ' as PKCS#8 for Chrome.');
+    }
   }
 }
 
