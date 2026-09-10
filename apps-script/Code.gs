@@ -22,38 +22,33 @@ const TZ = 'Asia/Kolkata';
 // business treats as "the BD team", so a name on it that is missing
 // here is a BD who gets told they aren't allowed to book.
 //
-// shreya@enout.in and shreya.bodwal@enout.in are both listed on
-// purpose: the second is the one on the roster, the first was already
-// here, and nobody could say which is current. An extra address costs
-// nothing; a missing one locks someone out.
+// Both Shreya addresses were removed on 10 Sep: checkAccess found Google
+// has no calendar at either, and neither is with the company any more.
+// Eight others went with them for the same reason. That roster is not
+// self-cleaning — someone leaving Kylas does not remove them from here, so
+// a name staying behind is how a departed employee keeps getting booked.
 const BOOKERS = [
   'aditi.saini@enout.in',
   'anjali.athya@enout.in',
   'arshdeep@enout.in',
   'ayush@enout.in',
   'bhaumik@enout.in',
-  'devansh.shukla@enout.in',
-  'gaurav@enout.in',
   'gurnoor@enout.in',
-  'hisham@enout.in',
-  'ife.malpani@enout.in',
   'keshav@enout.in',
   'mayra@enout.in',
   'muskan@enout.in',
-  'rashid@enout.in',
   'rubal@enout.in',
-  'saahil@enout.in',
-  'sejal.agarwal@enout.in',
-  'shreya.bodwal@enout.in',
-  'shreya@enout.in',
-  'tanay.kumar@enout.in'
+  'sejal.agarwal@enout.in'
 ];
 
 // ORDER MATTERS. This is the hierarchy. When more than one person is
 // free, the one highest in this list becomes the POC.
+// The POC rotation. A name left here after someone leaves is worse than
+// a stale list: the rotation keeps assigning them client calls they
+// will never attend. Shreya Bodwal was removed on 10 Sep for that
+// reason — she was POC #2 and no longer with the company.
 const PLAYERS = [
   { name: 'Hritik',  email: 'hrithik@enout.in' },
-  { name: 'Shreya',  email: 'shreya.bodwal@enout.in' },
   { name: 'Aarushi', email: 'aarushi@enout.in' },
   { name: 'Nikita',  email: 'nikita.sharma@enout.in' },
   { name: 'Keshav',  email: 'keshav@enout.in' }
