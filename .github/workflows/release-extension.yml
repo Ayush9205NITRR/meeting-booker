@@ -148,6 +148,52 @@ jobs:
           # hand-installed copy has the same id and auto-updates too.
           (cd extension && zip -qr "../dist/kylas-overlay-${{ steps.version.outputs.version }}.zip" . -x '*.DS_Store')
 
+          # The Chrome Web Store requires a privacy policy URL before it
+          # will accept a submission, even for a private, domain-only item.
+          # Hosting it next to the extension means it is versioned with the
+          # code that it describes, rather than living in someone's Docs.
+          cat > dist/privacy.html <<HTML
+          <!doctype html><meta charset="utf-8"><title>Kylas Overlay — Privacy</title>
+          <style>body{font:16px/1.65 system-ui;max-width:44rem;margin:3rem auto;padding:0 1rem;color:#222}
+          h2{margin-top:2rem;font-size:1.15rem}code{background:#f3f4f6;padding:.15em .4em;border-radius:4px}</style>
+          <h1>Kylas Overlay — Privacy</h1>
+          <p><em>Last updated: \$(date -u +%d\ %B\ %Y). Applies to version ${{ steps.version.outputs.version }}.</em></p>
+          <p>Kylas Overlay is an internal tool. It is published privately and can
+             only be installed by members of our Google Workspace domain.</p>
+          <h2>What it collects</h2>
+          <p><strong>Nothing is collected by the developer.</strong> The extension
+             has no analytics, no telemetry, and no server of its own. No data
+             about you or your browsing is sent anywhere outside the systems
+             listed below, all of which are operated by our own company.</p>
+          <h2>What it stores on your machine</h2>
+          <ul>
+            <li>Your work email address, so the account list shows your accounts.</li>
+            <li>Configuration supplied by your administrator (which Airtable base
+                to read, and the address of our internal booking service).</li>
+          </ul>
+          <p>These are held in Chrome's own extension storage on your device.</p>
+          <h2>What it talks to</h2>
+          <ul>
+            <li><code>app.kylas.io</code> — our CRM. The extension draws its panel
+                on these pages; it reads the record you are looking at to know
+                which account to show.</li>
+            <li><code>api.airtable.com</code> — our own Airtable base, read-only,
+                to display account information.</li>
+            <li><code>script.google.com</code> — our own Google Apps Script service,
+                to check calendar availability and create meetings you book.</li>
+            <li><code>raw.githubusercontent.com</code> — a JSON configuration file
+                that decides which fields the panel shows. Data only; no code is
+                downloaded or executed.</li>
+          </ul>
+          <h2>Meetings you book</h2>
+          <p>When you book a meeting, the invitation is created on your own Google
+             Calendar and the attendees you chose are invited. Details of that
+             meeting are written to our CRM, as they would be if you had entered
+             them by hand.</p>
+          <h2>Questions</h2>
+          <p>Contact your administrator.</p>
+          HTML
+
           # A page a BD can be pointed at, rather than a bare directory.
           cat > dist/index.html <<HTML
           <!doctype html><meta charset="utf-8"><title>Kylas Overlay</title>
