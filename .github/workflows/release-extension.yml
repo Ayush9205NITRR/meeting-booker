@@ -202,6 +202,14 @@ jobs:
           <p>Contact your administrator.</p>
           HTML
 
+          # The Web Store's graphics have to be uploaded as files — there is
+          # no URL field for them — and re-downloading them through chat or
+          # email risks a client re-encoding the PNG, which is one way an
+          # exactly-128x128 icon comes back "the wrong size". Serving them
+          # from here means the bytes that arrive are the bytes that were
+          # checked.
+          cp -r store-assets dist/store
+
           # A page a BD can be pointed at, rather than a bare directory.
           cat > dist/index.html <<HTML
           <!doctype html><meta charset="utf-8"><title>Kylas Overlay</title>
@@ -212,6 +220,19 @@ jobs:
           <p>Extension ID: <code>$EXT_ID</code></p>
           <p>If IT has rolled this out to you, it installs itself and updates itself —
              there is nothing to do here.</p>
+          <h2>For admins: Web Store submission assets</h2>
+          <ul>
+            <li><a href="store/store-icon-128.png">store-icon-128.png</a> &mdash; Store icon
+                (<a href="store/store-icon-128-no-alpha.png">flattened fallback</a>)</li>
+            <li><a href="store/promo-440x280.png">promo-440x280.png</a> &mdash; small promo tile</li>
+            <li><a href="store/promo-1400x560.png">promo-1400x560.png</a> &mdash; marquee tile</li>
+            <li>Screenshots:
+                <a href="store/shot1-company-panel.png">1</a>,
+                <a href="store/shot2-in-context.png">2</a>,
+                <a href="store/shot3-queue.png">3</a>,
+                <a href="store/shot4-booking.png">4</a></li>
+            <li><a href="store/listing.md">listing.md</a> &mdash; all the text, and the privacy answers</li>
+          </ul>
           <h2>For admins: the Chrome Web Store build</h2>
           <p><a href="kylas-overlay-store-${{ steps.version.outputs.version }}.zip">kylas-overlay-store-${{ steps.version.outputs.version }}.zip</a>
              &mdash; upload this one to the Web Store. It has no <code>key</code>
