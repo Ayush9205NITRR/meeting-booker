@@ -227,10 +227,9 @@ jobs:
             <li><a href="store/promo-440x280.png">promo-440x280.png</a> &mdash; small promo tile</li>
             <li><a href="store/promo-1400x560.png">promo-1400x560.png</a> &mdash; marquee tile</li>
             <li>Screenshots:
-                <a href="store/shot1-company-panel.png">1</a>,
-                <a href="store/shot2-in-context.png">2</a>,
-                <a href="store/shot3-queue.png">3</a>,
-                <a href="store/shot4-booking.png">4</a></li>
+                <a href="store/shot1-company.png">1</a>,
+                <a href="store/shot2-queue.png">2</a>,
+                <a href="store/shot3-booking.png">3</a></li>
             <li><a href="store/listing.md">listing.md</a> &mdash; all the text, and the privacy answers</li>
           </ul>
           <h2>For admins: the Chrome Web Store build</h2>

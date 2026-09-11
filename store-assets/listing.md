@@ -29,8 +29,10 @@ On a contact record it books a meeting — checks who is free, blocks the
 slot, invites the client contacts, and creates the matching deal in Kylas,
 in one step.
 
-The extension is published privately and is only installable by members of
-our Google Workspace domain. It has no analytics and no server of its own.
+The extension is built for our own team and is configured by our Chrome
+administrator. Installed without that configuration it shows sample data
+and cannot book anything, so it is of no use outside our organisation. It
+has no analytics and no server of its own.
 
 **Category**  Workflow & Planning
 **Language**  English (United Kingdom)
@@ -92,9 +94,13 @@ https://ayush9205nitrr.github.io/meeting-booker/privacy.html
 ---------------------------------------------------------------------------
 ## Distribution tab
 
-**Visibility**  Private
-**Publish to**  your Google Workspace domain  (NOT "Public", NOT "Unlisted")
+**Visibility**  Public
 **Regions**     all
+
+  Public was chosen over Private because publishing privately requires a
+  domain verification that kept failing. The trade-off is acceptable: the
+  package carries no credentials, so an outsider who installs it sees
+  sample data and a booking flow that cannot reach our backend.
 
 ---------------------------------------------------------------------------
 ## After it is approved
