@@ -148,6 +148,14 @@ jobs:
           # hand-installed copy has the same id and auto-updates too.
           (cd extension && zip -qr "../dist/kylas-overlay-${{ steps.version.outputs.version }}.zip" . -x '*.DS_Store')
 
+          # The Chrome Web Store build is the one made BEFORE the key and
+          # update_url were injected — the Store rejects a manifest carrying
+          # either. Publishing it here gives a stable link that needs no
+          # GitHub login, and the two names say which is which, because they
+          # are interchangeable on sight and not at all in effect.
+          cp "kylas-overlay-${{ steps.version.outputs.version }}.zip" \
+             "dist/kylas-overlay-store-${{ steps.version.outputs.version }}.zip"
+
           # The Chrome Web Store requires a privacy policy URL before it
           # will accept a submission, even for a private, domain-only item.
           # Hosting it next to the extension means it is versioned with the
@@ -204,7 +212,13 @@ jobs:
           <p>Extension ID: <code>$EXT_ID</code></p>
           <p>If IT has rolled this out to you, it installs itself and updates itself —
              there is nothing to do here.</p>
+          <h2>For admins: the Chrome Web Store build</h2>
+          <p><a href="kylas-overlay-store-${{ steps.version.outputs.version }}.zip">kylas-overlay-store-${{ steps.version.outputs.version }}.zip</a>
+             &mdash; upload this one to the Web Store. It has no <code>key</code>
+             and no <code>update_url</code>, both of which the Store rejects.</p>
           <h2>Installing it by hand</h2>
+          <p>Use the other zip for this &mdash; it carries the key that keeps the
+             extension id stable across reloads.</p>
           <ol>
             <li><a href="kylas-overlay-${{ steps.version.outputs.version }}.zip">Download the zip</a> and unzip it.</li>
             <li>Open <code>chrome://extensions</code> and turn on <strong>Developer mode</strong>.</li>
