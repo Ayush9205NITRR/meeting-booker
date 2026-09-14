@@ -52,7 +52,10 @@ const KYLAS = {
     Discovery:   { pipelineId: 32572, stageId: 227155, name: 'Discovery Call' }
   },
 
-  // INR. kylasSetup() prints what the tenant actually uses.
+  // Last resort only. kylasCurrencyId_() asks the tenant and caches the
+  // answer; this value is what it falls back to when that lookup fails,
+  // and it is a guess — Kylas rejected it as currency.is.invalid, which
+  // is exactly why nothing depends on it any more.
   currencyId: 400,
 
   // The contact's BD pipeline stage lives in a custom field. Booking a
@@ -139,7 +142,26 @@ function kylasUpdateContact_(contactId, changes) {
     }
   });
 
-  return kylasFetch_('PUT', '/contacts/' + encodeURIComponent(contactId), body);
+  try {
+    return kylasFetch_('PUT', '/contacts/' + encodeURIComponent(contactId), body);
+  } catch (err) {
+    // Kylas answers a body it dislikes with code 000000 and "Uhoh!
+    // Something didn't work as expected" — no field, no reason. Since the
+    // body here is the contact echoed back, the culprit is one of its own
+    // keys being read-only on write, and which one differs per tenant's
+    // custom fields. Naming the keys turns an unactionable message into a
+    // list to bisect; without it the only way forward is guessing at
+    // somebody's live CRM record.
+    const generic = /Uhoh|000000/.test(String(err && err.message));
+    if (!generic) throw err;
+    throw new Error(
+      String(err.message) +
+      ' — sent these fields: ' + Object.keys(body).sort().join(', ') +
+      (body.customFieldValues
+        ? '; customFieldValues: ' + Object.keys(body.customFieldValues).sort().join(', ')
+        : '')
+    );
+  }
 }
 
 /** Moves the contact's BD stage, e.g. to "Discovery Call Booked". */
@@ -185,10 +207,73 @@ function kylasCreateDeal_(spec) {
 
   const value = kylasNumber_(spec.value);
   if (value !== null) {
-    deal.estimatedValue = { currencyId: KYLAS.currencyId, value: value };
+    deal.estimatedValue = { currencyId: kylasCurrencyId_(), value: value };
   }
 
-  return kylasFetch_('POST', '/deals', deal);
+  try {
+    return kylasFetch_('POST', '/deals', deal);
+  } catch (err) {
+    // A deal value the tenant's currency won't accept must not cost the
+    // deal. KYLAS.currencyId was a hardcoded guess that Kylas rejected as
+    // currency.is.invalid, and the whole booking's CRM record went with
+    // it — no deal, no stage, nothing to show for a call that is now in
+    // everybody's calendar. Losing the estimated value is a far smaller
+    // loss than losing the deal, so drop it and say so.
+    if (!deal.estimatedValue || !/currency/i.test(String(err && err.message))) throw err;
+
+    // Whatever id was cached is wrong; don't serve it to the next booking.
+    try { CacheService.getScriptCache().remove('kylas:currencyId'); } catch (e) {}
+
+    delete deal.estimatedValue;
+    const created = kylasFetch_('POST', '/deals', deal);
+    created.valueDropped =
+      'Kylas rejected the currency, so the deal was created without its estimated value.';
+    return created;
+  }
+}
+
+/**
+ * The tenant's currency id, asked for rather than assumed.
+ *
+ * This was a hardcoded 400 with a comment claiming kylasSetup() printed
+ * the real one — it does not, and never did, so nothing ever checked the
+ * guess. Kylas answered currency.is.invalid and the deal was lost.
+ *
+ * Cached for a day because it changes about never, and read through
+ * whatever the tenant reports as its own default. If the lookup fails the
+ * old constant is still returned: the caller retries without a value on a
+ * currency error, so a bad id costs the value field, not the deal.
+ */
+function kylasCurrencyId_() {
+  let cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
+
+  if (cache) {
+    const hit = cache.get('kylas:currencyId');
+    if (hit) return Number(hit);
+  }
+
+  let id = KYLAS.currencyId;
+  try {
+    const list = kylasFetch_('GET', '/currencies');
+    const rows = (list && (list.content || list)) || [];
+    if (rows.length) {
+      // Prefer the tenant's own default, then INR, then simply the first
+      // one it offers — any real id beats a made-up one.
+      const pick =
+        rows.filter(function (c) { return c.isDefault || c.default; })[0] ||
+        rows.filter(function (c) { return String(c.code || c.currencyCode).toUpperCase() === 'INR'; })[0] ||
+        rows[0];
+      if (pick && pick.id) id = Number(pick.id);
+    }
+  } catch (e) {
+    // Endpoint missing or forbidden — fall through with the constant.
+  }
+
+  if (cache) {
+    try { cache.put('kylas:currencyId', String(id), 86400); } catch (e) {}
+  }
+  return id;
 }
 
 /**
@@ -198,7 +283,7 @@ function kylasCreateDeal_(spec) {
 function kylasMoveDealStage_(dealId, stageId, actualValue) {
   const payload = { reasonForClosing: null, products: null };
   const value = kylasNumber_(actualValue);
-  if (value !== null) payload.actualValue = { currencyId: KYLAS.currencyId, value: value };
+  if (value !== null) payload.actualValue = { currencyId: kylasCurrencyId_(), value: value };
 
   return kylasFetch_('POST',
     '/deals/' + encodeURIComponent(dealId) + '/pipeline-stages/' + encodeURIComponent(stageId) + '/activate',
@@ -271,6 +356,10 @@ function kylasOnBooked_(p) {
       value: deal.value
     });
     out.dealId = created.id || null;
+    // The deal exists but is missing the number the BD typed, so the panel
+    // has to say so — a value silently absent from the pipeline is worse
+    // than one that was never entered.
+    if (created.valueDropped) out.errors.push('Deal value: ' + created.valueDropped);
   } catch (err) {
     out.errors.push('Deal: ' + err.message);
   }
