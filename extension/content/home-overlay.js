@@ -164,6 +164,36 @@
     return usableBuckets().map((b) => ({ ...b, contacts: list.filter((r) => inBucket(r, b)) }));
   }
 
+  // The buckets are a worklist, not a breakdown, and the old footer — a
+  // bare "448 accounts owned by you" under numbers adding to 259 — read
+  // like one that didn't add up. Two reasons it doesn't, and neither is a
+  // fault: the buckets name specific stages, so anything in a stage they
+  // don't list is in no bucket at all, and "Connect today" is a date rule
+  // that overlaps the others rather than a stage of its own.
+  //
+  // So say how many are actually on the list, and account for the rest —
+  // without characterising what the rest are, which depends on a stage
+  // list this file does not own.
+  function queueLine(groups, total) {
+    const who = esc((state.owner && (state.owner.name || state.owner.email)) || "you");
+    const noun = byAccount ? "account" : "contact";
+    const plural = (n) => n + " " + noun + (n === 1 ? "" : "s");
+
+    // Overlapping buckets mean summing the counts double-counts, so count
+    // distinct rows instead.
+    const onList = new Set();
+    groups.forEach((g) => g.contacts.forEach((r) => onList.add(r)));
+    const rest = total - onList.size;
+
+    if (!total) return "No " + noun + "s owned by " + who;
+    if (rest <= 0) return plural(total) + " owned by " + who;
+
+    return (
+      onList.size + " to work, out of " + plural(total) + " owned by " + who +
+      " — the other " + rest + " are in stages these buckets don't cover."
+    );
+  }
+
   function render() {
     if (state.loading) {
       panel.setBody(
@@ -200,9 +230,10 @@
       ${listHtml(groups.find((g) => g.id === state.open))}
 
       <div class="ko-footer">
-        <div class="ko-hint">${total} ${byAccount ? "account" : "contact"}${total === 1 ? "" : "s"} owned by ${esc(
-      (state.owner && (state.owner.name || state.owner.email)) || "you"
-    )}</div>
+        <div class="ko-hint">${queueLine(groups, total)}</div>
+        <button class="ko-ghost-btn" id="ko-refresh"${state.refreshing ? " disabled" : ""}>${
+          state.refreshing ? "Refreshing…" : "Refresh"
+        }</button>
         <button class="ko-ghost-btn" id="ko-stages">${
           state.showStages ? "Hide stages found" : "Show stages found"
         }</button>
@@ -220,6 +251,16 @@
     panel.body.querySelector("#ko-stages").addEventListener("click", () => {
       state.showStages = !state.showStages;
       render();
+    });
+    // Re-reads Airtable rather than the half-hour cache. Deliberately does
+    // NOT go through state.loading — that blanks the queue to skeletons,
+    // and replacing numbers the BD is reading with empty boxes to tell them
+    // a refresh is happening is a poor trade. The button says it instead.
+    panel.body.querySelector("#ko-refresh").addEventListener("click", () => {
+      if (state.refreshing) return;
+      state.refreshing = true;
+      render();
+      load({ force: true });
     });
   }
 
@@ -340,8 +381,11 @@
     return `<div class="ko-raw">${list || '<div class="ko-raw-row">Nothing to show.</div>'}</div>`;
   }
 
-  async function load() {
-    state.loading = true;
+  async function load(opts) {
+    const force = !!(opts && opts.force);
+    // A forced reload already has a queue on screen and says so on the
+    // button; only the first load has nothing to show and earns skeletons.
+    if (!force) state.loading = true;
     render();
     try {
       const { bookerEmail } = await chrome.storage.sync.get("bookerEmail");
@@ -352,6 +396,7 @@
       // team sees in Airtable. The live Kylas path stays as the fallback.
       const res = await KylasOverlay.request("getMyAccounts", {
         ownerEmail: bookerEmail || "",
+        force,
       });
 
       if (res && res.ok && Array.isArray(res.accounts)) {
@@ -393,6 +438,7 @@
       state.error = String(err);
     } finally {
       state.loading = false;
+      state.refreshing = false;
       render();
     }
   }

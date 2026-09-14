@@ -388,7 +388,15 @@ async function handleRequest(action, payload) {
       // and a cache hit that dropped the flag would make the bucket flicker
       // in and out between reads.
       const cached = await chrome.storage.local.get([key, key + ":at", key + ":nc"]);
-      const fresh = cached[key] && Date.now() - (cached[key + ":at"] || 0) < 30 * 60 * 1000;
+      // payload.force is the refresh button. Half an hour is right for the
+      // normal case, but it is wrong exactly when the BD has just changed
+      // something in Kylas and is looking at the queue to see it — and with
+      // no way to say "now", the only options were waiting it out or
+      // doubting the number.
+      const fresh =
+        !payload.force &&
+        cached[key] &&
+        Date.now() - (cached[key + ":at"] || 0) < 30 * 60 * 1000;
       if (fresh) {
         return { ok: true, source: "cache", accounts: cached[key], hasNextCall: !!cached[key + ":nc"] };
       }
