@@ -88,18 +88,34 @@ async function callBackend(params) {
   }
 
   let res;
+  const started = Date.now();
   try {
     res = await fetch(url.toString(), { credentials: "include" });
   } catch (err) {
     return { ok: false, error: describeFetchFailure(err, url.toString()) };
   }
+  const waited = Date.now() - started;
 
   // Apps Script answers a signed-out or wrongly-shared request with an HTML
   // sign-in page and a 200, so a JSON parse error here is an access problem,
   // not a malformed response.
   const text = await res.text();
   try {
-    return JSON.parse(text);
+    const body = JSON.parse(text);
+    // The script's own time comes back as `ms`. Keeping the round trip
+    // beside it is what makes either number useful: 900ms of script inside
+    // a 19s wait is a queued execution or a cold start, not slow code, and
+    // those call for opposite fixes.
+    if (body && typeof body === "object") {
+      body.waitedMs = waited;
+      if (waited > 8000) {
+        console.warn(
+          `[kylas-overlay] ${params.action} took ${waited}ms` +
+            (typeof body.ms === "number" ? ` (${body.ms}ms of it inside the script)` : "")
+        );
+      }
+    }
+    return body;
   } catch (e) {
     return {
       ok: false,

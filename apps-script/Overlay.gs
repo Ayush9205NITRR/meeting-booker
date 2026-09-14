@@ -67,6 +67,13 @@ const OVERLAY_SELFTEST_COMPANY_ID = '1778327';
  */
 function overlayApi_(e) {
   const params = (e && e.parameter) || {};
+  // Stamped onto every answer as `ms` by overlayJson_. Without it a slow
+  // panel is indistinguishable from a slow network or an execution queued
+  // behind the 30-at-once ceiling, and the only evidence anyone has is
+  // "it took a while" — which is how the 25s timeout stayed a guess for as
+  // long as it did. This measures the script's own time, so comparing it
+  // against what the browser waited says which half the delay is in.
+  OVERLAY_T0 = Date.now();
   try {
     overlayCheckToken_(params);
 
@@ -226,7 +233,14 @@ function overlaySecret_(name) {
   return PropertiesService.getScriptProperties().getProperty(name);
 }
 
+// Set at the top of every request; `var` because Apps Script evaluates
+// these files in one scope and a `const` here would clash on reload.
+var OVERLAY_T0 = 0;
+
 function overlayJson_(obj) {
+  if (OVERLAY_T0 && obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    try { obj.ms = Date.now() - OVERLAY_T0; } catch (e) { /* frozen object */ }
+  }
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }

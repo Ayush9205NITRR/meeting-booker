@@ -182,6 +182,51 @@ function freeBusy_(emails, from, to) {
   });
 }
 
+/**
+ * freeBusy_ for the board, cached script-wide for a minute.
+ *
+ * The board asks about the same five POC calendars over the same window
+ * for every BD looking at the same slot, and each panel re-asks every 45
+ * seconds on its own timer. That was one Calendar API call per panel per
+ * refresh — the same answer computed over and over, all of it counting
+ * against the 30-simultaneous-executions ceiling that makes the rest of
+ * the team queue.
+ *
+ * CacheService is shared across executions, so the first BD to look at a
+ * slot pays for it and everyone else reads the result. A minute is short
+ * enough that a POC who accepts an invite shows as busy on the next
+ * refresh, and long enough to collapse a dozen panels into one call.
+ *
+ * Failing open matters: a cache miss must cost a slow board, never a
+ * broken one.
+ */
+function freeBusyCached_(emails, from, to) {
+  const key = 'fb:' + iso_(from) + '|' + iso_(to) + '|' + emails.join(',');
+  let cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
+
+  if (cache) {
+    try {
+      const hit = cache.get(key);
+      if (hit) return JSON.parse(hit);
+    } catch (e) { /* unreadable cache is a miss, not a failure */ }
+  }
+
+  const fresh = freeBusy_(emails, from, to);
+
+  if (cache) {
+    try {
+      // 100KB is the per-entry limit; five calendars of busy blocks is far
+      // under it, but a pathological week should skip the cache rather
+      // than throw on the way out.
+      const body = JSON.stringify(fresh);
+      if (body.length < 90000) cache.put(key, body, 60);
+    } catch (e) { /* not caching is fine; returning the answer is not optional */ }
+  }
+
+  return fresh;
+}
+
 // Google answers a large freeBusy query with `tooManyCalendarsRequested`
 // against SOME of the calendars — the rest come back fine, so the failure
 // reads as "these particular people are unreachable" when the truth is
@@ -225,7 +270,7 @@ function getBoard(localStart, duration) {
     const to   = new Date(Math.max(slotEnd.getTime(), slotStart.getTime() + 150 * 60000));
 
     const emails = PLAYERS.map(function (p) { return p.email; });
-    const fb = freeBusy_(emails, from, to);
+    const fb = freeBusyCached_(emails, from, to);
     const rot = rotation_();
 
     const players = PLAYERS.map(function (p, i) {
