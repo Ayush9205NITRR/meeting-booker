@@ -69,6 +69,49 @@ the Admin console wouldn't match.
 zip — you just don't get auto-update. That's the fallback, and it's how the
 first install happens either way.
 
+### The configured zip, and why it isn't on the website
+
+Auto-update needs the extension force-installed from the Admin console, and
+policy only reaches extensions Chrome installed that way — a **Load
+unpacked** copy never receives it. So during the pilot there is no way to
+push the backend URL or the Airtable token to anyone, and every BD would
+have to paste both into the popup by hand.
+
+`kylas-overlay-configured-<version>.zip` closes that: it is the same
+extension with `config/secrets.js` already written, so the BD unzips it,
+loads it, and is done. Nothing to configure.
+
+That file holds the POC Router URL **including its `?token=`**, plus the
+Airtable PAT. The zip is therefore a credential, and the workflow treats it
+as one:
+
+* it is uploaded as an **Actions artifact only** — never into `dist/`,
+  which is published to GitHub Pages with no login in front of it;
+* `secrets.js` is deleted straight after the zip is made, before the
+  signing and Pages steps rebuild the zip and the CRX out of `extension/`;
+* the **"Refuse to publish anything carrying a credential"** step runs
+  immediately before the Pages upload and fails the build if `secrets.js`
+  is still in the tree, if a configured zip reached `dist/`, or if any zip
+  or the CRX about to be published contains it.
+
+That last step is the one that matters. The `rm` two steps earlier is what
+*should* keep the credential out; the guard is what catches it if someone
+later reorders the steps or adds another `zip -r extension/`. Don't remove
+it because it has never fired.
+
+Hand the configured zip to BDs through the **Drive folder shared with the
+team** — never through a link anyone can open. If you paste it somewhere
+public, treat both the overlay token and the PAT as burned and rotate them.
+
+Set `OVERLAY_BACKEND_URL` to the complete `/exec?token=…` URL. The build
+**fails** if there's no token on it, because the web app is deployed
+`ANYONE_ANONYMOUS` and the token is the only thing gating it — a URL
+without one is refused on every request, and the BD just sees "rejected the
+token" with nothing they can do about it.
+
+Set neither secret and the configured zip is simply skipped, with a notice
+saying so. The plain zip is still built.
+
 ---
 
 ## `claude.yml`
@@ -95,6 +138,8 @@ you'd otherwise be waiting on a reply that never comes.
 | `CRX_PRIVATE_KEY` | auto-update | `openssl genrsa -out key.pem 2048` |
 | `KYLAS_API_KEY` | Kylas writes | Optional — Script Properties works instead |
 | `AIRTABLE_PAT` | Airtable reads from the backend | Optional — same |
+| `OVERLAY_BACKEND_URL` | configured zip | The whole `/exec?token=…` URL. Build fails without the token on it. |
+| `OVERLAY_AIRTABLE_PAT` | configured zip | **Read-only** PAT scoped to the company base — this copy sits in every BD's browser |
 
 Import and deploy **skip themselves with a warning** when their secrets are
 missing, so an unconfigured repo doesn't turn every commit red. Release
