@@ -232,3 +232,45 @@ jobs:
           clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${{ github.sha }}"
           rm -f .clasp.json
           echo "::notice::Live. The /exec URL is unchanged."
+
+      # appsscript.json declaring ANYONE_ANONYMOUS does not make the live
+      # deployment anonymous. "Who has access" belongs to the deployment,
+      # is set in the Apps Script UI, and applies when that deployment is
+      # CREATED; pushing new code to an existing one never changes it. So
+      # the manifest can say one thing while the web app does another, and
+      # nothing here noticed.
+      #
+      # That gap cost a lot to find. A domain-restricted web app answers a
+      # signed-in browser perfectly, so every manual test passed — while
+      # the extension, whose service worker cannot send Google's session
+      # cookie on a cross-site request, got a sign-in page on every call
+      # and surfaced it as a 25s timeout naming no cause at all.
+      #
+      # So don't trust the manifest. Ask the deployment, as a stranger.
+      - name: Check the deployment actually answers anonymously
+        if: steps.secrets.outputs.ready == 'true' && !inputs.code_only
+        env:
+          DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+          OVERLAY_TOKEN: ${{ secrets.OVERLAY_TOKEN }}
+        run: |
+          URL="https://script.google.com/macros/s/$DEPLOYMENT_ID/exec"
+          # No credentials of any kind: the runner is exactly as anonymous
+          # as the extension's service worker, which is the point.
+          BODY=$(curl -sL --max-time 90 "$URL?action=ping&token=$OVERLAY_TOKEN" || true)
+
+          case "$BODY" in
+            *'"pong":true'*)
+              echo "::notice::The deployment answers anonymously — the extension can reach it." ;;
+            '<!DOCTYPE'*|'<html'*|*accounts.google.com*|*ServiceLogin*)
+              echo "::error::The live deployment returned a SIGN-IN PAGE, not JSON. Its \"Who has access\" is not \"Anyone\", so the Chrome extension can never reach it — a browser will not send Google's session cookie on a cross-site request from a service worker, and signing in does not help. The code deployed fine; this is a deployment setting, and appsscript.json cannot change it. Fix it once: Apps Script -> Deploy -> Manage deployments -> edit the active deployment -> Who has access -> Anyone -> Deploy. The URL and deployment id stay the same. OVERLAY_TOKEN still gates every request, so this does not leave the endpoint open."
+              exit 1 ;;
+            *'Bad or missing token'*)
+              echo "::error::The deployment is reachable anonymously but rejected OVERLAY_TOKEN, so the secret and the deployed Secrets.gs disagree. Check for a stale OVERLAY_TOKEN in Apps Script -> Project Settings -> Script Properties: that is read only when the generated Secrets.gs has no value, so an old one there is invisible until it isn't."
+              exit 1 ;;
+            "")
+              echo "::error::The deployment did not answer within 90s, so nothing can be concluded about its access setting. Re-run to see whether that repeats."
+              exit 1 ;;
+            *)
+              echo "::error::Unexpected answer from the deployment: $(printf '%s' "$BODY" | head -c 300)"
+              exit 1 ;;
+          esac
