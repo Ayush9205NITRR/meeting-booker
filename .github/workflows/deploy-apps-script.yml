@@ -254,9 +254,27 @@ jobs:
           OVERLAY_TOKEN: ${{ secrets.OVERLAY_TOKEN }}
         run: |
           URL="https://script.google.com/macros/s/$DEPLOYMENT_ID/exec"
-          # No credentials of any kind: the runner is exactly as anonymous
-          # as the extension's service worker, which is the point.
-          BODY=$(curl -sL --max-time 90 "$URL?action=ping&token=$OVERLAY_TOKEN" || true)
+
+          # Apps Script does not switch a deployment to the new version the
+          # instant clasp returns, so asking immediately can get an answer
+          # from the version that was live a second ago — including its
+          # OVERLAY_TOKEN. The first run of this check failed exactly that
+          # way and blamed the secret, which was correct about the symptom
+          # and wrong about the cause.
+          #
+          # So give it time to settle, and only treat a token rejection as
+          # real once it has survived the wait. A sign-in page needs no
+          # retry — that is a deployment setting and will not change on its
+          # own — so bail out of the loop for it immediately.
+          BODY=""
+          for attempt in 1 2 3 4 5 6; do
+            BODY=$(curl -sL --max-time 60 "$URL?action=ping&token=$OVERLAY_TOKEN" || true)
+            case "$BODY" in
+              *'"pong":true'*) break ;;
+              '<!DOCTYPE'*|'<html'*|*accounts.google.com*|*ServiceLogin*) break ;;
+            esac
+            [ "$attempt" = 6 ] || { echo "Attempt $attempt did not get a pong; waiting for the deployment to settle."; sleep 10; }
+          done
 
           case "$BODY" in
             *'"pong":true'*)
@@ -265,7 +283,7 @@ jobs:
               echo "::error::The live deployment returned a SIGN-IN PAGE, not JSON. Its \"Who has access\" is not \"Anyone\", so the Chrome extension can never reach it — a browser will not send Google's session cookie on a cross-site request from a service worker, and signing in does not help. The code deployed fine; this is a deployment setting, and appsscript.json cannot change it. Fix it once: Apps Script -> Deploy -> Manage deployments -> edit the active deployment -> Who has access -> Anyone -> Deploy. The URL and deployment id stay the same. OVERLAY_TOKEN still gates every request, so this does not leave the endpoint open."
               exit 1 ;;
             *'Bad or missing token'*)
-              echo "::error::The deployment is reachable anonymously but rejected OVERLAY_TOKEN, so the secret and the deployed Secrets.gs disagree. Check for a stale OVERLAY_TOKEN in Apps Script -> Project Settings -> Script Properties: that is read only when the generated Secrets.gs has no value, so an old one there is invisible until it isn't."
+              echo "::error::The deployment is reachable anonymously but still rejected OVERLAY_TOKEN after a minute of retries, so this is not the new version taking its time — the secret and what the live script checks genuinely disagree. Most likely a stale OVERLAY_TOKEN in Apps Script -> Project Settings -> Script Properties: that is read only when the generated Secrets.gs has no value for it, so an old one sits there invisible until it isn't. Delete it, and re-run."
               exit 1 ;;
             "")
               echo "::error::The deployment did not answer within 90s, so nothing can be concluded about its access setting. Re-run to see whether that repeats."
