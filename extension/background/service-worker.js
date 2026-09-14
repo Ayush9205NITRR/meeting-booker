@@ -297,6 +297,11 @@ async function handleRequest(action, payload) {
     // is 36, past the ceiling, where requests queue and the panel sits on
     // skeletons. The cached pipelines are passed back in so the server can
     // skip that part of the work entirely.
+    // The Kylas half of a contact page: pipelines and the contact record.
+    // Deliberately NOT the calendar board — Apps Script runs one execution
+    // on one thread, so bundling the board in here would put the calendar
+    // call in series with the Kylas ones. The content script asks for the
+    // board alongside this, and the two run as parallel executions.
     case "contactBootstrap": {
       const cached = await chrome.storage.local.get(["dealPipelines", "dealPipelinesAt"]);
       const freshPipes =
@@ -314,28 +319,24 @@ async function handleRequest(action, payload) {
         : await callBackend({
             action: "contactBootstrap",
             contactId: payload.contactId,
-            localStart: payload.localStart,
-            duration: payload.duration,
           });
 
       if (!result || result.ok === false) {
         // Fall back here rather than sending the content script round
-        // again: these three are independent, so they go together and cost
-        // one round trip's wall time instead of three.
+        // again: these two are independent, so they go together and cost
+        // one round trip's wall time instead of two.
         if (result) await chrome.storage.local.set({ bootstrapUnsupported: true });
 
-        const [board, pipelines, contact] = await Promise.all([
-          callBackend({ action: "board", localStart: payload.localStart, duration: payload.duration }),
+        const [pipelines, contact] = await Promise.all([
           freshPipes
             ? Promise.resolve({ ok: true, pipelines: cached.dealPipelines })
             : callBackend({ action: "dealPipelines" }),
           callBackend({ action: "contact", contactId: payload.contactId }),
         ]);
 
-        if (!board && !contact) return { ok: false, error: "No backend configured." };
+        if (!pipelines && !contact) return { ok: false, error: "No backend configured." };
         result = {
           ok: true,
-          board: board || { ok: false, error: "Couldn't read calendars." },
           pipelines: (pipelines && pipelines.pipelines) || [],
           contact: contact || { ok: false, error: "Contact lookup failed." },
         };

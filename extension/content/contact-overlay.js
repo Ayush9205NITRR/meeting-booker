@@ -784,30 +784,35 @@
     state.error = null;
     if (!state.board) render();
 
-    // First paint asks once for everything; later loads (a changed date or
-    // length) only need the board, so they use the cheap call. Three
-    // requests per page was the load problem — see contactBootstrap in the
-    // service worker.
+    // First paint needs the calendar board and the Kylas side of the page;
+    // later loads (a changed date or length) only need the board, so they
+    // skip the second call. Three requests per page was the load problem —
+    // see contactBootstrap in the service worker.
     const firstPaint = !state.board && !state.bootstrapped;
 
     try {
       let res;
       if (firstPaint) {
-        const all = await KylasOverlay.request("contactBootstrap", {
-          contactId: state.contactId,
-          localStart: localStart(),
-          duration: state.duration,
-        });
+        // Two requests, sent together. They become two backend executions
+        // that run at the same time, so the page waits for the slower of
+        // the two rather than for the sum of them — which is exactly what
+        // answering both from one execution would have cost.
+        const [board, all] = await Promise.all([
+          KylasOverlay.request("getBoard", {
+            localStart: localStart(),
+            duration: state.duration,
+          }),
+          KylasOverlay.request("contactBootstrap", { contactId: state.contactId }),
+        ]);
+        res = board;
 
-        if (all && all.ok !== false && all.board) {
+        if (all && all.ok !== false) {
           state.bootstrapped = true;
           applyBootstrap(all);
-          res = all.board;
         } else {
           // The service worker falls back on our behalf, so reaching here
           // means there is no backend at all rather than an old one.
           state.bootstrapped = "unsupported";
-          res = all && all.board;
         }
         // Only now — the bootstrap carries the pipelines and the contact,
         // and starting this before it lands makes both requests again.

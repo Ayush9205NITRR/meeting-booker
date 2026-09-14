@@ -82,7 +82,8 @@ function overlayApi_(e) {
       case 'myContacts':
         return overlayJson_(overlayMyContacts_(params.ownerEmail));
 
-      // One execution instead of three — see overlayBootstrap_.
+      // The Kylas half of a contact page in one execution, running
+      // alongside the board request — see overlayBootstrap_.
       case 'contactBootstrap':
         return overlayJson_(overlayBootstrap_(params));
 
@@ -303,26 +304,25 @@ function overlayKylasAll_(specs) {
 // ============ BOOTSTRAP ============
 
 /**
- * Everything a contact page needs, in ONE execution.
+ * The Kylas half of a contact page: the contact record and the deal
+ * pipelines, answered together.
  *
- * The overlay used to ask for the board, the deal pipelines and the
- * contact separately. Three requests means three Apps Script executions,
- * each paying its own start-up, and Apps Script allows only 30 running at
- * once for the whole script. Twelve people opening a contact is 36 — past
- * the ceiling, where requests queue and the panel sits on skeletons.
- * Answering all three from one execution cuts that by two thirds.
+ * This deliberately does NOT include the calendar board. Apps Script runs
+ * one execution on one thread, so bundling the board in here put the
+ * calendar call in SERIES with the Kylas calls and made the page wait for
+ * the sum of the two rather than the slower of them — worse than the
+ * three separate requests it replaced, which at least ran in parallel.
  *
- * Each part is caught on its own: a Kylas outage should still leave the
+ * The board is its own request and runs alongside this one. Two parallel
+ * executions instead of three: still less pressure on the 30-execution
+ * ceiling that made twelve BDs queue behind each other, without paying
+ * for it in latency.
+ *
+ * Each part is caught on its own, so a Kylas outage still leaves the
  * calendar half of the panel working.
  */
 function overlayBootstrap_(params) {
   const out = { ok: true };
-
-  try {
-    out.board = getBoard(params.localStart, Number(params.duration) || 30);
-  } catch (err) {
-    out.board = { ok: false, error: String(err && err.message ? err.message : err) };
-  }
 
   try {
     out.pipelines = overlayDealPipelines_();
