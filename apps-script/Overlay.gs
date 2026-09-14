@@ -337,6 +337,19 @@ function overlayBootstrap_(params) {
     out.contact = { ok: false, error: String(err && err.message ? err.message : err) };
   }
 
+  // An extension from the version that expected the board in here sends a
+  // localStart; the current one does not. Answering it keeps that BD's
+  // panel working through the gap between this deploying and them
+  // reloading the extension — at the old serial cost, which is theirs
+  // only until they do. Nobody on the current extension pays for it.
+  if (params.localStart) {
+    try {
+      out.board = getBoard(params.localStart, Number(params.duration) || 30);
+    } catch (err) {
+      out.board = { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  }
+
   return out;
 }
 
