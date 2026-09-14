@@ -168,9 +168,16 @@ function kylasUpdateContact_(contactId, changes) {
   // it now; the write is checked against this afterwards.
   const ownerBefore = kylasOwnerId_(current);
 
+  // THE call site. Everything below writes through this and nothing else,
+  // so tools/check.js counting exactly one PUT stays a true statement
+  // about this file.
+  const writeContact = function (payload) {
+    return kylasFetch_('PUT', '/contacts/' + encodeURIComponent(contactId), payload);
+  };
+
   let result;
   try {
-    result = kylasFetch_('PUT', '/contacts/' + encodeURIComponent(contactId), body);
+    result = writeContact(body);
   } catch (err) {
     // Kylas answers a body it dislikes with code 000000 and "Uhoh!
     // Something didn't work as expected" — no field, no reason. Since the
@@ -181,13 +188,56 @@ function kylasUpdateContact_(contactId, changes) {
     // somebody's live CRM record.
     const generic = /Uhoh|000000/.test(String(err && err.message));
     if (!generic) throw err;
-    throw new Error(
-      String(err.message) +
-      ' — sent these fields: ' + Object.keys(body).sort().join(', ') +
-      (body.customFieldValues
-        ? '; customFieldValues: ' + Object.keys(body.customFieldValues).sort().join(', ')
-        : '')
-    );
+
+    // The body is now down to seven fields, every one of them on Kylas'
+    // documented list, and it is still refused. So the objection is to a
+    // value, not a field name — most likely the sub-objects inside emails
+    // or phoneNumbers, which come back from a GET carrying ids the write
+    // does not want.
+    //
+    // The whole reason this sends the record back at all is the claim at
+    // the top of this file that a partial PUT blanks what it omits. That
+    // claim has never been tested, and it is the only thing standing
+    // between us and a one-field update that would obviously work.
+    //
+    // So test it, on the path that has already failed anyway. Send just
+    // the change, then read the record back and compare against what was
+    // there. If nothing was lost, the claim is false for this tenant and
+    // the stage is set. If something WAS lost, put it back immediately
+    // from the copy still in memory, and say so loudly.
+    result = writeContact({ customFieldValues: body.customFieldValues });
+
+    const after = kylasGetContact_(contactId);
+    const lost = WRITABLE.filter(function (k) {
+      if (k === 'customFieldValues' || k === 'company') return false;
+      const had = current[k];
+      if (had === undefined || had === null || had === '') return false;
+      const now = after[k];
+      if (Array.isArray(had)) return !Array.isArray(now) || now.length < had.length;
+      return now === undefined || now === null || now === '';
+    });
+
+    if (lost.length) {
+      // Restore before reporting: leaving a record worse than we found it
+      // is not an acceptable outcome of failing to move a stage.
+      try {
+        writeContact(body);
+      } catch (restoreErr) {
+        throw new Error(
+          'The stage update blanked ' + lost.join(', ') + ' on this contact AND the ' +
+          'restore failed (' + restoreErr.message + '). Fix the record in Kylas by hand, now.'
+        );
+      }
+      throw new Error(
+        'Kylas refused the full update (' + err.message + '), and a minimal one blanked ' +
+        lost.join(', ') + '. Both were undone, so the record is as it was, but the ' +
+        'stage was not moved.'
+      );
+    }
+
+    result.reducedBody =
+      'Kylas refused the full contact update, so only the stage field was sent. ' +
+      'The record was read back afterwards and nothing else changed.';
   }
 
   // The write succeeded — but succeeding is not the same as leaving the
@@ -278,23 +328,55 @@ function kylasCreateDeal_(spec) {
     deal.estimatedValue = { currencyId: kylasCurrencyId_(), value: value };
   }
 
-  try {
-    return kylasFetch_('POST', '/deals', deal);
-  } catch (err) {
-    // A deal value the tenant's currency won't accept must not cost the
-    // deal. KYLAS.currencyId was a hardcoded guess that Kylas rejected as
-    // currency.is.invalid, and the whole booking's CRM record went with
-    // it — no deal, no stage, nothing to show for a call that is now in
-    // everybody's calendar. Losing the estimated value is a far smaller
-    // loss than losing the deal, so drop it and say so.
-    if (!deal.estimatedValue || !/currency/i.test(String(err && err.message))) throw err;
+  // Kylas answers a deal it dislikes with 01003002, "Uhho! Something went
+  // wrong!", and names nothing. Three rounds of reading its published
+  // example and matching the payload did not stop it, so stop reasoning
+  // about which optional block it objects to and find out.
+  //
+  // Each step drops one optional block and tries again. The first body
+  // that succeeds both creates the deal and identifies the block that was
+  // being rejected, which is the thing nobody could see. Required fields —
+  // name, owner, pipeline, stage — are never dropped: a deal without them
+  // is not worth having, and their absence is a configuration error that
+  // should surface as itself.
+  const reductions = [
+    { key: 'estimatedValue', why: 'the estimated value (currency or amount)' },
+    { key: 'associatedContacts', why: 'the linked contact' },
+    { key: 'company', why: 'the linked company' }
+  ];
 
-    delete deal.estimatedValue;
-    const created = kylasFetch_('POST', '/deals', deal);
-    created.valueDropped =
-      'Kylas rejected the currency, so the deal was created without its estimated value.';
-    return created;
+  let lastError = null;
+  for (let i = 0; i <= reductions.length; i++) {
+    // i = 0 is the full payload; each later pass drops one more block.
+    const attempt = JSON.parse(JSON.stringify(deal));
+    const dropped = [];
+    for (let j = 0; j < i; j++) {
+      if (attempt[reductions[j].key] !== undefined) {
+        delete attempt[reductions[j].key];
+        dropped.push(reductions[j].why);
+      }
+    }
+
+    // Nothing left to drop that the payload actually had — retrying an
+    // identical body would just repeat the same failure.
+    if (i > 0 && !dropped.length) continue;
+
+    try {
+      const created = kylasFetch_('POST', '/deals', attempt);
+      if (dropped.length) {
+        created.valueDropped =
+          'Kylas refused the deal until ' + dropped.join(' and ') +
+          ' was left off, so it was created without that. Everything else is set.';
+      }
+      return created;
+    } catch (err) {
+      lastError = err;
+      // A refusal that names its own cause is not a mystery to bisect.
+      if (!/01003002|Uhho|Uhoh|currency/i.test(String(err && err.message))) throw err;
+    }
   }
+
+  throw lastError;
 }
 
 /**
@@ -411,8 +493,12 @@ function kylasOnBooked_(p) {
   // Only a discovery booking moves the contact's stage.
   if (p.callType === 'Discovery' && p.contactId) {
     try {
-      kylasSetContactStage_(p.contactId, KYLAS.discoveryStageValue);
+      const moved = kylasSetContactStage_(p.contactId, KYLAS.discoveryStageValue);
       out.stageMoved = true;
+      // The stage is set, but by a narrower write than intended. Say so —
+      // it is the evidence that names which part of the full body Kylas
+      // was refusing, and it is worth nobody's time to rediscover it.
+      if (moved && moved.reducedBody) out.errors.push('Contact stage: ' + moved.reducedBody);
     } catch (err) {
       out.errors.push('Contact stage: ' + err.message);
     }
