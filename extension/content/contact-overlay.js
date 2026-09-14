@@ -132,11 +132,9 @@
     if (b && b.blockAll && needsPoc()) {
       b.players.forEach((p) => add(p.email, p.name, "POC — slot held"));
     }
-    if (b) {
-      b.reviewers.forEach((r) => {
-        if (state.revSel[r.email]) add(r.email, r.name, "Reviewer");
-      });
-    }
+    visibleReviewers().forEach((r) => {
+      if (state.revSel[r.email]) add(r.email, r.name, "Reviewer");
+    });
 
     (state.companyContacts || []).forEach((c) => {
       if (state.pickedContacts[c.email]) {
@@ -372,7 +370,7 @@
         <button class="ko-link" id="ko-rev-all">${everyOn() ? "Clear all" : "Add all"}</button></div>
       <div class="ko-tags">
         ${you ? `<span class="ko-fixed"><span class="ko-tk">✓</span>${esc(you.split("@")[0])} (you)</span>` : ""}
-        ${b.reviewers
+        ${visibleReviewers()
           // The booker already has a fixed chip; showing them again as a
           // toggleable reviewer reads as the same person listed twice.
           .filter((r) => String(r.email).toLowerCase() !== String(you).toLowerCase())
@@ -555,10 +553,21 @@
       </div>`;
   }
 
-  function everyOn() {
-    return (
-      state.board && state.board.reviewers.every((r) => state.revSel[r.email])
+  // Reviewers can be scoped to particular call types — Keshav is on
+  // Discovery only. No `types` means every type. Everything that reads the
+  // reviewer list goes through here: the chips, "Add all", and the booking
+  // payload. A list that disagrees with itself is how somebody ends up on
+  // an invite they were never shown on.
+  function visibleReviewers() {
+    const all = (state.board && state.board.reviewers) || [];
+    return all.filter(
+      (r) => !Array.isArray(r.types) || r.types.indexOf(state.callType) !== -1
     );
+  }
+
+  function everyOn() {
+    const shown = visibleReviewers();
+    return shown.length > 0 && shown.every((r) => state.revSel[r.email]);
   }
 
   function flagHtml() {
@@ -711,7 +720,7 @@
     if (revAll) {
       revAll.addEventListener("click", () => {
         const on = !everyOn();
-        state.board.reviewers.forEach((r) => { state.revSel[r.email] = on; });
+        visibleReviewers().forEach((r) => { state.revSel[r.email] = on; });
         render();
       });
     }
@@ -989,7 +998,10 @@
         title: state.title.trim(),
         company: state.company.trim(),
         callType: state.callType,
-        reviewers: state.board.reviewers
+        // visibleReviewers, not every reviewer: a Discovery-only name stays
+        // ticked in revSel after switching back to a requirement call, and
+        // sending that would invite someone the panel had stopped showing.
+        reviewers: visibleReviewers()
           .filter((r) => state.revSel[r.email])
           .map((r) => r.email),
         externals: state.externals,

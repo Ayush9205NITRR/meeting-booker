@@ -64,12 +64,18 @@ const BLOCK_ALL_PLAYERS = true;
 // 'rotation' — among the free ones, whoever took a call least recently.
 const ASSIGNMENT = 'order';
 
+// `types` limits a reviewer to certain call types. Leaving it off means
+// every type, which is what all the long-standing entries want. The panel
+// filters on this, so changing the call type re-picks the list with no
+// extra round trip — and anyone not shown for the selected type is not on
+// the invite either, rather than being hidden but still invited.
 const REVIEWERS = [
   { name: 'Ayush',      email: 'ayush@enout.in',      default: true  },
   { name: 'Akash',      email: 'akash@enout.in',      default: true  },
   { name: 'Lakshaya',   email: 'lakshaya.sharma@enout.in',   default: true },
   { name: 'Experience', email: 'experience@enout.in', default: true  },
-  { name: 'Pawanjot', email: 'pawanjot@enout.in', default: true  }
+  { name: 'Pawanjot', email: 'pawanjot@enout.in', default: true  },
+  { name: 'Keshav',    email: 'keshav@enout.in',     default: true, types: ['Discovery'] }
 ];
 
 const DEFAULT_DURATION = 30;
