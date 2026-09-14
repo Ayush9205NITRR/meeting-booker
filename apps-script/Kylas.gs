@@ -52,10 +52,9 @@ const KYLAS = {
     Discovery:   { pipelineId: 32572, stageId: 227155, name: 'Discovery Call' }
   },
 
-  // Last resort only. kylasCurrencyId_() asks the tenant and caches the
-  // answer; this value is what it falls back to when that lookup fails,
-  // and it is a guess — Kylas rejected it as currency.is.invalid, which
-  // is exactly why nothing depends on it any more.
+  // What Kylas' own Create Deal example sends. A tenant whose currency
+  // differs makes the deal POST retry without the estimated value, so a
+  // wrong id here costs that field and not the deal.
   currencyId: 400,
 
   // The contact's BD pipeline stage lives in a custom field. Booking a
@@ -122,16 +121,36 @@ function kylasGetContact_(contactId) {
 function kylasUpdateContact_(contactId, changes) {
   const current = kylasGetContact_(contactId);
 
-  // Start from the record as it is, so nothing is dropped.
+  // Carry over every field Kylas documents as writable on this endpoint,
+  // and nothing else.
+  //
+  // This was a denylist of six server-managed names, which meant every
+  // other key a GET happened to return went back up in the PUT. Kylas
+  // answered "Uhoh! Something didn't work as expected" with no field named,
+  // and the real body held createdViaId/Name/Type, updatedViaId/Name/Type,
+  // importedBy, metaData, score and ownerId — ten fields it never asked
+  // for. A denylist has to predict what the server will add; this list
+  // comes from Kylas' own Update Contact example, so a new read-only field
+  // appearing in a GET cannot break the write.
+  //
+  // Nothing writable is lost by omission: a field outside this set is one
+  // the endpoint would not have changed anyway. That includes the owner —
+  // Update Contact has no owner field at all, so the owner survives
+  // because it is untouchable here, not because we echo it back.
+  const WRITABLE = [
+    'salutation', 'firstName', 'lastName', 'phoneNumbers', 'emails',
+    'customFieldValues', 'dnd', 'timezone', 'address', 'city', 'state',
+    'zipcode', 'country', 'facebook', 'twitter', 'linkedin', 'company',
+    'department', 'designation', 'stakeholder'
+  ];
+
   const body = {};
-  Object.keys(current).forEach(function (k) {
-    // Server-managed fields are rejected or meaningless on write.
-    if (['id', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'recordActions'].indexOf(k) !== -1) return;
-    body[k] = current[k];
+  WRITABLE.forEach(function (k) {
+    if (current[k] !== undefined && current[k] !== null) body[k] = current[k];
   });
 
-  // ownedBy must survive untouched unless a change explicitly moves it.
-  if (current.ownedBy && current.ownedBy.id) body.ownedBy = { id: current.ownedBy.id };
+  // company comes back as an object and goes up as a bare id — Kylas'
+  // own example sends `"company": 894`.
   if (current.company && current.company.id) body.company = current.company.id;
 
   Object.keys(changes || {}).forEach(function (k) {
@@ -142,8 +161,16 @@ function kylasUpdateContact_(contactId, changes) {
     }
   });
 
+  // Neither Create Contact nor Update Contact documents an owner field, so
+  // this body cannot set one — but the header of this file warns that a
+  // body Kylas dislikes can reset the owner to the API key's account, and
+  // that is not a claim to take on trust with live records. Note who owns
+  // it now; the write is checked against this afterwards.
+  const ownerBefore = kylasOwnerId_(current);
+
+  let result;
   try {
-    return kylasFetch_('PUT', '/contacts/' + encodeURIComponent(contactId), body);
+    result = kylasFetch_('PUT', '/contacts/' + encodeURIComponent(contactId), body);
   } catch (err) {
     // Kylas answers a body it dislikes with code 000000 and "Uhoh!
     // Something didn't work as expected" — no field, no reason. Since the
@@ -162,6 +189,38 @@ function kylasUpdateContact_(contactId, changes) {
         : '')
     );
   }
+
+  // The write succeeded — but succeeding is not the same as leaving the
+  // record alone. Read the owner back and compare. If Kylas moved it, that
+  // is a data incident on somebody's account, and it must be loud and
+  // immediate rather than discovered weeks later in a pipeline report.
+  // A failed check is never itself a reason to fail the booking: the slot
+  // is already held, so this raises only when the owner actually changed.
+  if (ownerBefore) {
+    let ownerAfter = ownerBefore;
+    try {
+      ownerAfter = kylasOwnerId_(kylasGetContact_(contactId));
+    } catch (err) {
+      ownerAfter = ownerBefore;   // couldn't re-read; don't cry wolf
+    }
+    if (ownerAfter && String(ownerAfter) !== String(ownerBefore)) {
+      throw new Error(
+        'The contact stage was written, but the contact OWNER changed from ' +
+        ownerBefore + ' to ' + ownerAfter + '. Reassign it in Kylas and tell ' +
+        'Ayush — this update is not supposed to touch ownership.'
+      );
+    }
+  }
+
+  return result;
+}
+
+/** Kylas returns the owner as ownedBy on some reads and ownerId on others. */
+function kylasOwnerId_(record) {
+  if (!record) return null;
+  if (record.ownedBy && record.ownedBy.id) return record.ownedBy.id;
+  if (record.ownerId) return record.ownerId;
+  return null;
 }
 
 /** Moves the contact's BD stage, e.g. to "Discovery Call Booked". */
@@ -186,6 +245,11 @@ function kylasCreateDeal_(spec) {
 
   const closure = new Date(Date.now() + (KYLAS.closureDays * 86400000));
 
+  // Shaped after Kylas' own Create Deal example, which sends a `name`
+  // alongside every id — on ownedBy, on pipeline, on the stage. Ours sent
+  // bare ids and got a 500 with code 01003002 and no field named, which is
+  // what Kylas returns when it cannot resolve something it expected to.
+  // The names are free: the panel already knows them.
   const deal = {
     ownedBy: { id: Number(spec.ownerId) },
     name: String(spec.name || 'Untitled deal'),
@@ -195,6 +259,10 @@ function kylasCreateDeal_(spec) {
       stage: { id: Number(spec.stageId) }
     }
   };
+
+  if (spec.ownerName) deal.ownedBy.name = String(spec.ownerName);
+  if (spec.pipelineName) deal.pipeline.name = String(spec.pipelineName);
+  if (spec.stageName) deal.pipeline.stage.name = String(spec.stageName);
 
   if (spec.companyId) {
     deal.company = { id: Number(spec.companyId) };
@@ -221,9 +289,6 @@ function kylasCreateDeal_(spec) {
     // loss than losing the deal, so drop it and say so.
     if (!deal.estimatedValue || !/currency/i.test(String(err && err.message))) throw err;
 
-    // Whatever id was cached is wrong; don't serve it to the next booking.
-    try { CacheService.getScriptCache().remove('kylas:currencyId'); } catch (e) {}
-
     delete deal.estimatedValue;
     const created = kylasFetch_('POST', '/deals', deal);
     created.valueDropped =
@@ -233,47 +298,18 @@ function kylasCreateDeal_(spec) {
 }
 
 /**
- * The tenant's currency id, asked for rather than assumed.
+ * The tenant's currency id.
  *
- * This was a hardcoded 400 with a comment claiming kylasSetup() printed
- * the real one — it does not, and never did, so nothing ever checked the
- * guess. Kylas answered currency.is.invalid and the deal was lost.
+ * This briefly tried to discover it from GET /currencies. That endpoint
+ * does not exist in Kylas' published API — it was my invention, and every
+ * booking paid a round trip for a 404 before falling back here anyway.
  *
- * Cached for a day because it changes about never, and read through
- * whatever the tenant reports as its own default. If the lookup fails the
- * old constant is still returned: the caller retries without a value on a
- * currency error, so a bad id costs the value field, not the deal.
+ * 400 is the value Kylas' own Create Deal example uses. If a tenant's
+ * differs, kylasCreateDeal_ retries without the estimated value, so a
+ * wrong id costs the value field rather than the deal.
  */
 function kylasCurrencyId_() {
-  let cache = null;
-  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
-
-  if (cache) {
-    const hit = cache.get('kylas:currencyId');
-    if (hit) return Number(hit);
-  }
-
-  let id = KYLAS.currencyId;
-  try {
-    const list = kylasFetch_('GET', '/currencies');
-    const rows = (list && (list.content || list)) || [];
-    if (rows.length) {
-      // Prefer the tenant's own default, then INR, then simply the first
-      // one it offers — any real id beats a made-up one.
-      const pick =
-        rows.filter(function (c) { return c.isDefault || c.default; })[0] ||
-        rows.filter(function (c) { return String(c.code || c.currencyCode).toUpperCase() === 'INR'; })[0] ||
-        rows[0];
-      if (pick && pick.id) id = Number(pick.id);
-    }
-  } catch (e) {
-    // Endpoint missing or forbidden — fall through with the constant.
-  }
-
-  if (cache) {
-    try { cache.put('kylas:currencyId', String(id), 86400); } catch (e) {}
-  }
-  return id;
+  return KYLAS.currencyId;
 }
 
 /**
@@ -345,11 +381,19 @@ function kylasOnBooked_(p) {
   const stageId = deal.stageId || fallback.stageId;
 
   try {
+    // Kylas' Create Deal example names the pipeline and stage as well as
+    // identifying them. The panel doesn't send names, but the backend has
+    // the pipeline list cached already, so look them up here rather than
+    // widening the request the extension makes.
+    const named = kylasPipelineNames_(pipelineId, stageId);
+
     const created = kylasCreateDeal_({
       name: deal.name || fallback.name,
       ownerId: ownerId,
       pipelineId: pipelineId,
+      pipelineName: named.pipelineName,
       stageId: stageId,
+      stageName: named.stageName,
       companyId: deal.companyId,
       companyName: p.company,
       contactId: deal.contactId || p.contactId,
@@ -575,4 +619,33 @@ function kylasSelfTest() {
   } catch (err) {
     Logger.log('Kylas reachable: NO — ' + err.message);
   }
+}
+
+/**
+ * The display names for a pipeline and one of its stages.
+ *
+ * Kylas' Create Deal example carries a name beside every id, and ours sent
+ * bare ids. The pipeline list is already cached by the overlay, so this
+ * costs nothing on the common path.
+ *
+ * Names are decoration, not identity — the ids are what Kylas resolves on.
+ * So a lookup that fails returns empty strings and the deal is created
+ * without them, rather than failing over a label.
+ */
+function kylasPipelineNames_(pipelineId, stageId) {
+  const out = { pipelineName: '', stageName: '' };
+  try {
+    const pipes = overlayDealPipelines_() || [];
+    const pipe = pipes.filter(function (p) { return Number(p.id) === Number(pipelineId); })[0];
+    if (!pipe) return out;
+    out.pipelineName = pipe.name || '';
+
+    const stage = (pipe.stages || []).filter(function (s) {
+      return Number(s.id) === Number(stageId);
+    })[0];
+    if (stage) out.stageName = stage.name || '';
+  } catch (err) {
+    // Pipelines unreachable; the ids still identify everything that matters.
+  }
+  return out;
 }
