@@ -82,6 +82,10 @@ function overlayApi_(e) {
       case 'myContacts':
         return overlayJson_(overlayMyContacts_(params.ownerEmail));
 
+      // One execution instead of three — see overlayBootstrap_.
+      case 'contactBootstrap':
+        return overlayJson_(overlayBootstrap_(params));
+
       // Calendar availability. These two were the gap behind "unknown
       // action: board": Code.gs has had getBoard() and findNextSlots() all
       // along, but index.html reaches them through google.script.run, so
@@ -230,6 +234,110 @@ function overlayCheckToken_(params) {
   const expected = overlaySecret_('OVERLAY_TOKEN');
   if (!expected) return;                       // token not in use
   if (params.token !== expected) throw new Error('Bad or missing token.');
+}
+
+// ============ PARALLEL FETCH ============
+
+/**
+ * Runs several Kylas calls at once instead of one after another.
+ *
+ * Every request here used to be its own UrlFetchApp.fetch, and each one
+ * waits for the previous to come back. Loading a contact meant three
+ * Kylas round trips end to end — the contact, its company, and the other
+ * contacts at that company — when none of them depends on the result of
+ * another. fetchAll issues them together, so the wall time is the slowest
+ * one rather than the sum.
+ *
+ * Returns an array positionally matching `specs`. A failed entry is null
+ * rather than an exception: one dead call should cost its own panel row,
+ * not the whole page.
+ */
+function overlayKylasAll_(specs) {
+  if (!specs.length) return [];
+  const key = overlayKylasKey_();
+
+  const requests = specs.map(function (spec) {
+    if (spec.method === 'post') {
+      return {
+        url: 'https://api.kylas.io' + spec.path,
+        method: 'post',
+        contentType: 'application/json',
+        headers: { 'api-key': key },
+        payload: JSON.stringify(spec.payload),
+        muteHttpExceptions: true
+      };
+    }
+    return {
+      url: 'https://api.kylas.io' + spec.path,
+      method: 'get',
+      headers: { 'api-key': key, Accept: 'application/json' },
+      muteHttpExceptions: true
+    };
+  });
+
+  let responses;
+  try {
+    responses = UrlFetchApp.fetchAll(requests);
+  } catch (err) {
+    // Returning nulls here would silently drop whatever those calls were
+    // for — a company with no owner and no name, and nothing to say why.
+    // Slow and correct beats fast and quietly wrong, so fall back to one
+    // at a time.
+    return requests.map(function (req) {
+      try {
+        const res = UrlFetchApp.fetch(req.url, req);
+        if (res.getResponseCode() !== 200) return null;
+        return JSON.parse(res.getContentText());
+      } catch (e) { return null; }
+    });
+  }
+
+  return responses.map(function (res) {
+    try {
+      if (res.getResponseCode() !== 200) return null;
+      return JSON.parse(res.getContentText());
+    } catch (err) { return null; }
+  });
+}
+
+// ============ BOOTSTRAP ============
+
+/**
+ * Everything a contact page needs, in ONE execution.
+ *
+ * The overlay used to ask for the board, the deal pipelines and the
+ * contact separately. Three requests means three Apps Script executions,
+ * each paying its own start-up, and Apps Script allows only 30 running at
+ * once for the whole script. Twelve people opening a contact is 36 — past
+ * the ceiling, where requests queue and the panel sits on skeletons.
+ * Answering all three from one execution cuts that by two thirds.
+ *
+ * Each part is caught on its own: a Kylas outage should still leave the
+ * calendar half of the panel working.
+ */
+function overlayBootstrap_(params) {
+  const out = { ok: true };
+
+  try {
+    out.board = getBoard(params.localStart, Number(params.duration) || 30);
+  } catch (err) {
+    out.board = { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+
+  try {
+    out.pipelines = overlayDealPipelines_();
+  } catch (err) {
+    out.pipelines = [];
+    out.pipelinesError = String(err && err.message ? err.message : err);
+  }
+
+  try {
+    out.contact = overlayContact_(params.contactId);
+  } catch (err) {
+    out.contact = { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+
+  return out;
 }
 
 // ============ COMPANY LOOKUP ============
@@ -500,30 +608,37 @@ function overlayDealPipelinesFresh_() {
   const raw = overlayKylasGet_('/v1/pipelines?entityType=deal');
   const list = raw.content || raw.data || (Array.isArray(raw) ? raw : []);
 
-  return list
-    .filter(function (p) { return p.active !== false; })
-    .map(function (p) {
-      // A list response doesn't always carry stages. Fetching the pipeline
-      // on its own does, and a pipeline with no stages is useless here —
-      // a deal has to be created in one.
-      let stages = p.stages || p.pipelineStages || [];
-      if (!stages.length) {
-        try {
-          const full = overlayKylasGet_('/v1/pipelines/' + p.id);
-          stages = full.stages || full.pipelineStages || [];
-        } catch (err) {
-          stages = [];
-        }
-      }
+  const active = list.filter(function (p) { return p.active !== false; });
 
-      return {
-        id: p.id,
-        name: p.name || ('Pipeline ' + p.id),
-        stages: stages.map(function (s) {
-          return { id: s.id, name: s.name || ('Stage ' + s.id) };
-        })
-      };
-    });
+  // A list response doesn't always carry stages, and a pipeline with no
+  // stages is useless here — a deal has to be created in one. Fetching
+  // each pipeline separately was one round trip PER pipeline, one after
+  // another; the ones that need it now go together in a single batch.
+  const needsStages = active.filter(function (p) {
+    return !(p.stages || p.pipelineStages || []).length;
+  });
+  const fetched = overlayKylasAll_(needsStages.map(function (p) {
+    return { path: '/v1/pipelines/' + p.id };
+  }));
+  const byId = {};
+  needsStages.forEach(function (p, i) {
+    const full = fetched[i];
+    if (full) byId[p.id] = full.stages || full.pipelineStages || [];
+  });
+
+  return active.map(function (p) {
+    const stages = (p.stages || p.pipelineStages || []).length
+      ? (p.stages || p.pipelineStages)
+      : (byId[p.id] || []);
+
+    return {
+      id: p.id,
+      name: p.name || ('Pipeline ' + p.id),
+      stages: stages.map(function (s) {
+        return { id: s.id, name: s.name || ('Stage ' + s.id) };
+      })
+    };
+  });
 }
 
 /**
@@ -534,6 +649,31 @@ function overlayDealPipelinesFresh_() {
  * URL. The owner goes on the calendar invite; the company drives both the
  * invite title and the deal, so the same name is used everywhere.
  */
+/** The Kylas search body for "every contact at this company". */
+function overlayCompanyContactsQuery_(companyId) {
+  return {
+    fields: ['id', 'firstName', 'lastName', 'emails', 'company', 'department', 'designation'],
+    jsonRule: {
+      rules: [{ id: 'company.id', field: 'company.id', type: 'string',
+                operator: 'equal', value: String(companyId) }],
+      condition: 'AND', valid: true
+    }
+  };
+}
+
+/** Search response -> the rows the overlay draws. */
+function overlayCompanyContactRows_(body) {
+  const list = (body && (body.content || body.data)) || [];
+  return list.map(function (c) {
+    return {
+      id: c.id,
+      name: [c.firstName, c.lastName].filter(String).join(' ').trim(),
+      email: overlayPrimaryEmail_(c),
+      designation: c.designation || ''
+    };
+  }).filter(function (c) { return c.email; });
+}
+
 function overlayContact_(contactId) {
   const id = String(contactId == null ? '' : contactId).trim();
   if (!id) throw new Error('contactId is required.');
@@ -546,32 +686,32 @@ function overlayContact_(contactId) {
     company = { id: companyRef.id, name: companyRef.name || '', dealValue: '' };
     // The full record carries the value field; a miss is not fatal, the BD
     // can still type one.
-    try {
-      const full = overlayKylasGet_('/v1/companies/' + encodeURIComponent(companyRef.id));
+  }
+
+  // The company record and the company's other contacts both hang off the
+  // company id and neither needs the other, so they go together. Fetched
+  // one after another they cost two Kylas round trips; fetched together
+  // they cost the slower of the two. Only the first call — the contact
+  // itself — genuinely has to happen first, because it is what tells us
+  // the company id.
+  let companyContacts = [];
+  if (company && company.id) {
+    const answers = overlayKylasAll_([
+      { path: '/v1/companies/' + encodeURIComponent(company.id) },
+      { path: '/v1/search/contact?page=0&size=100&sort=updatedAt,desc',
+        method: 'post', payload: overlayCompanyContactsQuery_(company.id) }
+    ]);
+
+    const full = answers[0];
+    if (full) {
       company.name = full.name || company.name;
       company.dealValue = overlayPickValue_(full);
       // Who owns the ACCOUNT, which is not always who owns this one
       // contact. The invite is about the account, so this is the owner
       // that belongs on it.
       company.owner = overlayOwner_(full.ownedBy);
-    } catch (e) {
-      /* keep the reference-only company */
     }
-  }
-
-  // The company's other contacts ride along rather than costing a second
-  // round trip. The overlay used to ask for them separately, and every
-  // Apps Script call is a redirect plus a cold-start risk — the round trip
-  // dominates, not the work inside it. The server already knows the
-  // company id by this point, so answering it here is free.
-  let companyContacts = [];
-  if (company && company.id) {
-    try {
-      const listed = overlayCompanyContacts_(company.id);
-      companyContacts = (listed && listed.contacts) || [];
-    } catch (e) {
-      /* the overlay falls back to asking separately */
-    }
+    if (answers[1]) companyContacts = overlayCompanyContactRows_(answers[1]);
   }
 
   return {
@@ -607,14 +747,28 @@ function overlayPrimaryEmail_(record) {
 function overlayOwner_(ownedBy) {
   if (!ownedBy || !ownedBy.id) return null;
   const owner = { id: ownedBy.id, name: ownedBy.name || '', email: ownedBy.email || '' };
-  if (!owner.email) {
-    try {
-      const user = overlayKylasGet_('/v1/users/' + encodeURIComponent(ownedBy.id));
-      owner.email = user.email || '';
-      owner.name = owner.name || [user.firstName, user.lastName].filter(String).join(' ').trim();
-    } catch (e) {
-      /* no email available; the overlay shows the name without one */
+  if (owner.email) return owner;
+
+  // The whole user list is already fetched and cached for fifteen minutes
+  // elsewhere in this file. Looking one owner up in it costs nothing,
+  // where /v1/users/{id} was a Kylas round trip on every contact page —
+  // paid again for each of the twelve people who opened one.
+  try {
+    const users = overlayCachedUsers_();
+    const hit = users && users[String(ownedBy.id)];
+    if (hit) {
+      owner.email = hit.email || '';
+      owner.name = owner.name || hit.name || '';
+      return owner;
     }
+  } catch (e) { /* fall through to the direct read */ }
+
+  try {
+    const user = overlayKylasGet_('/v1/users/' + encodeURIComponent(ownedBy.id));
+    owner.email = user.email || '';
+    owner.name = owner.name || [user.firstName, user.lastName].filter(String).join(' ').trim();
+  } catch (e) {
+    /* no email available; the overlay shows the name without one */
   }
   return owner;
 }
@@ -667,20 +821,7 @@ function overlayCompanyContacts_(companyId) {
     throw new Error('Kylas contact search returned ' + res.getResponseCode());
   }
 
-  const body = JSON.parse(res.getContentText());
-  const list = body.content || body.data || [];
-
-  return {
-    ok: true,
-    contacts: list.map(function (c) {
-      return {
-        id: c.id,
-        name: [c.firstName, c.lastName].filter(String).join(' ').trim(),
-        email: overlayPrimaryEmail_(c),
-        designation: c.designation || ''
-      };
-    }).filter(function (c) { return c.email; })
-  };
+  return { ok: true, contacts: overlayCompanyContactRows_(JSON.parse(res.getContentText())) };
 }
 
 // ============ THE BDR'S OWN CONTACTS ============
@@ -719,28 +860,40 @@ function overlayViewerEmail_() {
   }
 }
 
-function overlayFindUserByEmail_(email) {
-  const target = String(email).trim().toLowerCase();
+/**
+ * The Kylas user list, fetched once every fifteen minutes and shared by
+ * everyone the script serves. Both lookups below read it — by email when
+ * resolving a BD, by id when naming a record owner — so the 200 rows are
+ * fetched once rather than once per caller.
+ */
+function overlayUserList_() {
   const cache = CacheService.getScriptCache();
   const cached = cache.get('overlayUsers');
+  if (cached) return JSON.parse(cached);
 
-  let users;
-  if (cached) {
-    users = JSON.parse(cached);
-  } else {
-    const raw = overlayKylasGet_('/v1/users?page=0&size=200');
-    const list = raw.content || raw.data || (Array.isArray(raw) ? raw : []);
-    users = list.map(function (u) {
-      return {
-        id: u.id,
-        email: String(u.email || '').toLowerCase(),
-        name: [u.firstName, u.lastName].filter(String).join(' ').trim() || u.name || ''
-      };
-    });
-    cache.put('overlayUsers', JSON.stringify(users), 900);
-  }
+  const raw = overlayKylasGet_('/v1/users?page=0&size=200');
+  const list = raw.content || raw.data || (Array.isArray(raw) ? raw : []);
+  const users = list.map(function (u) {
+    return {
+      id: u.id,
+      email: String(u.email || '').toLowerCase(),
+      name: [u.firstName, u.lastName].filter(String).join(' ').trim() || u.name || ''
+    };
+  });
+  cache.put('overlayUsers', JSON.stringify(users), 900);
+  return users;
+}
 
-  return users.filter(function (u) { return u.email === target; })[0] || null;
+/** id -> user, off the same cached list. */
+function overlayCachedUsers_() {
+  const byId = {};
+  overlayUserList_().forEach(function (u) { byId[String(u.id)] = u; });
+  return byId;
+}
+
+function overlayFindUserByEmail_(email) {
+  const target = String(email).trim().toLowerCase();
+  return overlayUserList_().filter(function (u) { return u.email === target; })[0] || null;
 }
 
 /**

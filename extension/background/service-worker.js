@@ -291,6 +291,70 @@ async function handleRequest(action, payload) {
       }
       return result || { ok: true, pipelines: [] };
     }
+    // One request for everything a contact page needs. Three separate
+    // calls meant three Apps Script executions, and Apps Script runs at
+    // most 30 at once for the whole script — twelve BDs opening a contact
+    // is 36, past the ceiling, where requests queue and the panel sits on
+    // skeletons. The cached pipelines are passed back in so the server can
+    // skip that part of the work entirely.
+    case "contactBootstrap": {
+      const cached = await chrome.storage.local.get(["dealPipelines", "dealPipelinesAt"]);
+      const freshPipes =
+        cached.dealPipelines &&
+        Date.now() - (cached.dealPipelinesAt || 0) < 10 * 60 * 1000;
+
+      // A backend that predates this action answers "unknown action".
+      // Discovering that costs a round trip, so the answer is remembered:
+      // the first contact page on an old deployment pays it once, not
+      // every page for every BD. Cleared by a successful bootstrap, so a
+      // redeployment is picked up without anyone reinstalling.
+      const support = await chrome.storage.local.get("bootstrapUnsupported");
+      let result = support.bootstrapUnsupported
+        ? null
+        : await callBackend({
+            action: "contactBootstrap",
+            contactId: payload.contactId,
+            localStart: payload.localStart,
+            duration: payload.duration,
+          });
+
+      if (!result || result.ok === false) {
+        // Fall back here rather than sending the content script round
+        // again: these three are independent, so they go together and cost
+        // one round trip's wall time instead of three.
+        if (result) await chrome.storage.local.set({ bootstrapUnsupported: true });
+
+        const [board, pipelines, contact] = await Promise.all([
+          callBackend({ action: "board", localStart: payload.localStart, duration: payload.duration }),
+          freshPipes
+            ? Promise.resolve({ ok: true, pipelines: cached.dealPipelines })
+            : callBackend({ action: "dealPipelines" }),
+          callBackend({ action: "contact", contactId: payload.contactId }),
+        ]);
+
+        if (!board && !contact) return { ok: false, error: "No backend configured." };
+        result = {
+          ok: true,
+          board: board || { ok: false, error: "Couldn't read calendars." },
+          pipelines: (pipelines && pipelines.pipelines) || [],
+          contact: contact || { ok: false, error: "Contact lookup failed." },
+        };
+      } else if (support.bootstrapUnsupported) {
+        await chrome.storage.local.remove("bootstrapUnsupported");
+      }
+
+      if (Array.isArray(result.pipelines) && result.pipelines.length) {
+        await chrome.storage.local.set({
+          dealPipelines: result.pipelines,
+          dealPipelinesAt: Date.now(),
+        });
+      } else if (freshPipes) {
+        // The server had nothing to say about pipelines this time; the
+        // local copy is still good and beats an empty dropdown.
+        result.pipelines = cached.dealPipelines;
+      }
+      return result;
+    }
     case "getContact": {
       const result = await callBackend({
         action: "contact",

@@ -784,11 +784,40 @@
     state.error = null;
     if (!state.board) render();
 
+    // First paint asks once for everything; later loads (a changed date or
+    // length) only need the board, so they use the cheap call. Three
+    // requests per page was the load problem — see contactBootstrap in the
+    // service worker.
+    const firstPaint = !state.board && !state.bootstrapped;
+
     try {
-      const res = await KylasOverlay.request("getBoard", {
-        localStart: localStart(),
-        duration: state.duration,
-      });
+      let res;
+      if (firstPaint) {
+        const all = await KylasOverlay.request("contactBootstrap", {
+          contactId: state.contactId,
+          localStart: localStart(),
+          duration: state.duration,
+        });
+
+        if (all && all.ok !== false && all.board) {
+          state.bootstrapped = true;
+          applyBootstrap(all);
+          res = all.board;
+        } else {
+          // The service worker falls back on our behalf, so reaching here
+          // means there is no backend at all rather than an old one.
+          state.bootstrapped = "unsupported";
+          res = all && all.board;
+        }
+        // Only now — the bootstrap carries the pipelines and the contact,
+        // and starting this before it lands makes both requests again.
+        loadDealSetup();
+      } else {
+        res = await KylasOverlay.request("getBoard", {
+          localStart: localStart(),
+          duration: state.duration,
+        });
+      }
       if (!res || res.ok === false) {
         state.error = (res && res.error) || "Couldn't read calendars.";
         state.board = null;
@@ -823,8 +852,31 @@
   // Deal setup, fetched once per contact. Neither of these should be able
   // to break booking, so a failure just leaves the dropdown or the company
   // line empty rather than surfacing an error over the whole panel.
+  // The bootstrap answer carries the pipelines and the contact alongside
+  // the board. Feeding them through the same code paths the separate
+  // requests used means nothing downstream has to know where they came
+  // from, and loadDealSetup can skip the network entirely.
+  function applyBootstrap(all) {
+    if (Array.isArray(all.pipelines) && all.pipelines.length) {
+      state.pipelines = all.pipelines;
+      applyPipelineDefault();
+    }
+    if (all.contact && all.contact.ok !== false) {
+      state.bootstrapContact = all.contact;
+    }
+  }
+
   async function loadDealSetup() {
     const problems = [];
+
+    // Already answered by the bootstrap request — don't ask again.
+    if (state.bootstrapContact) {
+      const contactRes = state.bootstrapContact;
+      state.bootstrapContact = null;
+      applyContactResponse(contactRes, problems);
+      finishDealSetup(problems);
+      return;
+    }
 
     // Both at once. They don't depend on each other, and each is a round
     // trip to Apps Script — which redirects, and may cold-start — so doing
@@ -848,7 +900,15 @@
       }
     }
 
-    const res = contactRes;
+    applyContactResponse(contactRes, problems);
+    finishDealSetup(problems);
+  }
+
+  // Pulled out of loadDealSetup so the bootstrap path and the separate
+  // request path fill the panel identically — two copies of this would
+  // drift, and the difference would only show on whichever path is used
+  // less.
+  function applyContactResponse(res, problems) {
     if (res && res.ok) {
       state.assoc = res;
       // Company name flows into both the invite title and the deal.
@@ -874,7 +934,9 @@
       problems.push((res && res.error) || "Contact lookup failed");
       state.companyContacts = [];
     }
+  }
 
+  function finishDealSetup(problems) {
     // Say why rather than leaving a dropdown spinning forever.
     state.setupError = problems.length
       ? problems.join(". ") + ". Set the POC Router URL in the extension popup."
@@ -986,8 +1048,9 @@
       avatar: "📅",
       subtitleHtml: `Contact #${esc(contactId)}`,
     });
+    // load() starts the deal setup itself once its answer is in; calling
+    // both here raced them and cost two extra round trips on every page.
     load();
-    loadDealSetup();
   }, () => {
     // Left the contact — stop the 45s board refresh so a hidden panel
     // isn't polling calendars in the background.
