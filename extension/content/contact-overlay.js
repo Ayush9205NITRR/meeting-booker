@@ -609,6 +609,25 @@
     return `${label}, ${fmt(d)}–${fmt(end)}`;
   }
 
+  // The backend collects a reason for every CRM step that didn't happen and
+  // sends them as crmErrors. Nothing read them, so a deal that failed to
+  // create showed as a success screen with the Deal row simply absent —
+  // the BD had no way to tell "no deal was asked for" from "Kylas refused
+  // it", and the reason was sitting in the response the whole time.
+  function crmErrors(r) {
+    return Array.isArray(r && r.crmErrors) ? r.crmErrors : [];
+  }
+
+  function crmReason(r) {
+    const deal = crmErrors(r).filter((e) => /^(Deal|Owner lookup|CRM):/.test(e));
+    // Strip the prefix; the row is already labelled "Deal".
+    return deal.map((e) => e.replace(/^(Deal|CRM):\s*/, "")).join("; ");
+  }
+
+  function otherCrmErrors(r) {
+    return crmErrors(r).filter((e) => !/^(Deal|Owner lookup|CRM):/.test(e));
+  }
+
   function resultHtml() {
     const r = state.booked;
     if (!r) return "";
@@ -635,7 +654,25 @@
               }"><span>Organiser</span><span>${esc(r.organiser)}</span></div>`
             : ""
         }
-        ${r.dealId ? `<div class="ko-kv"><span>Deal</span><span>${esc(r.dealId)}</span></div>` : ""}
+        ${
+          r.dealId
+            ? `<div class="ko-kv"><span>Deal</span><span>${esc(r.dealId)}</span></div>`
+            : `<div class="ko-kv flagged"><span>Deal</span><span>Not created${
+                crmReason(r) ? " — " + esc(crmReason(r)) : ""
+              }</span></div>`
+        }
+        ${
+          // Anything else the CRM refused — a stage that didn't move, a note
+          // that didn't attach. The slot is held either way, so these are
+          // not failures of the booking, but they are things someone has to
+          // go and do by hand, and they were previously invisible.
+          otherCrmErrors(r)
+            .map(
+              (e) =>
+                `<div class="ko-kv flagged"><span>Kylas</span><span>${esc(e)}</span></div>`
+            )
+            .join("")
+        }
         ${r.conflict ? `<div class="ko-kv flagged"><span>Heads up</span><span>${esc(r.conflict)}</span></div>` : ""}
         ${r.note ? `<div class="ko-kv"><span>Note</span><span>${esc(r.note)}</span></div>` : ""}
         ${
