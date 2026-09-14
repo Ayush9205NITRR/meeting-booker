@@ -22,6 +22,7 @@ chrome.storage.sync.get(FIELDS).then((stored) => {
     document.querySelector("details").open = true;
   }
   if (!stored.airtablePat) showProvidedToken();
+  if (!stored.backendUrl) showProvidedBackend();
 });
 
 // A token can arrive from an admin policy or from the bundled secrets
@@ -46,6 +47,35 @@ async function showProvidedToken() {
     });
     if (res && res.source === "bundled") {
       el("airtablePat").placeholder = "Already configured — nothing to do";
+    }
+  } catch (e) {
+    /* worker asleep; leave the default placeholder */
+  }
+}
+
+// The booking URL carries its own ?token=, and on the build the pilot runs
+// it is baked in rather than typed. An empty box therefore means "set up
+// already" far more often than it means "not set up", and saying so is the
+// difference between a BD leaving it alone and pasting a tokenless URL
+// over it.
+async function showProvidedBackend() {
+  let managed = {};
+  try {
+    managed = (await chrome.storage.managed.get(null)) || {};
+  } catch (e) {
+    /* no policy set */
+  }
+  if (managed.backendUrl) {
+    el("backendUrl").placeholder = "Set by your administrator — nothing to do";
+    return;
+  }
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: "KYLAS_OVERLAY_REQUEST",
+      action: "backendSource",
+    });
+    if (res && res.source === "bundled") {
+      el("backendUrl").placeholder = "Already configured — leave blank";
     }
   } catch (e) {
     /* worker asleep; leave the default placeholder */
@@ -104,7 +134,31 @@ document.getElementById("version").textContent =
 // message. ?action=ping touches nothing: it reads no data and writes none.
 document.getElementById("test").addEventListener("click", async () => {
   const backendUrl = (document.getElementById("backendUrl").value || "").trim();
-  if (!backendUrl) return setStatus("Paste the POC Router /exec URL first.", "err");
+
+  // Empty box is the normal state on a configured build, so fall through to
+  // the worker, which tests whatever URL is actually in force. Testing only
+  // what was typed made this button do nothing for the people most likely
+  // to press it.
+  if (!backendUrl) {
+    setStatus("Testing…");
+    let res;
+    try {
+      res = await chrome.runtime.sendMessage({
+        type: "KYLAS_OVERLAY_REQUEST",
+        action: "ping",
+      });
+    } catch (e) {
+      return setStatus("The extension's background worker didn't answer. Reload it from chrome://extensions.", "err");
+    }
+    if (res && res.pong) return setStatus("Backend answered. You're connected.", "ok");
+    if (res && /token/i.test(res.error || "")) {
+      return setStatus("Backend is up but rejected the token. This build needs rebuilding against the current one.", "err");
+    }
+    return setStatus(
+      (res && res.error) || "No POC Router URL is configured — paste one above, or install the configured build.",
+      "err"
+    );
+  }
 
   setStatus("Testing…");
   let url;

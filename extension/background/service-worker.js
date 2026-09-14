@@ -469,6 +469,27 @@ async function handleRequest(action, payload) {
       if (bundledSettings().airtablePat) return { ok: true, source: "bundled" };
       return { ok: true, source: "none" };
     }
+    // The same question for the booking backend. The configured build
+    // carries the /exec URL and its token inside it, so the popup's box is
+    // empty by design — and without this the BD reads that blank field as
+    // missing setup and pastes over a working value with one that has no
+    // token on it, which is how a working install gets broken by hand.
+    case "backendSource": {
+      const stored = await chrome.storage.sync.get("backendUrl");
+      if (stored.backendUrl) return { ok: true, source: "user" };
+      const managed = await managedSettings();
+      if (managed.backendUrl) return { ok: true, source: "managed" };
+      if (bundledSettings().backendUrl) return { ok: true, source: "bundled" };
+      return { ok: true, source: "none" };
+    }
+    // Ping whatever URL is actually in force, rather than only one typed
+    // into the box. Without this the Test button is useless on exactly the
+    // build the pilot runs: it demands a URL the BD does not have and
+    // cannot get, since the token is deliberately never shown.
+    case "ping": {
+      const result = await callBackend({ action: "ping" });
+      return result || { ok: false, error: "No POC Router URL is configured." };
+    }
     default:
       return { ok: false, error: `unknown action: ${action}` };
   }
