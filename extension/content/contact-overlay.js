@@ -208,7 +208,15 @@
     const next = () => ++step;
 
     panel.setBody(`
-      ${state.error ? `<div class="ko-error">${esc(state.error)}</div>` : ""}
+      ${
+        state.error
+          ? `<div class="ko-error">${esc(state.error)}${
+              state.retryIn
+                ? ` <span class="ko-hint">Retrying in ${state.retryIn}s…</span>`
+                : ` <button class="ko-link" id="ko-retry">Try again</button>`
+            }</div>`
+          : ""
+      }
       ${
         b && b.demo
           ? `<div class="ko-notice">${esc(b.notice)}</div>`
@@ -327,6 +335,12 @@
   function rosterHtml() {
     const b = state.board;
     if (!b) {
+      // Skeletons mean "still coming". Once the request has failed they
+      // are a lie the panel keeps telling — the error is already on
+      // screen, and a shimmer under it reads as the two disagreeing.
+      if (state.error) {
+        return '<p class="ko-hint">No calendars to show until the list above loads.</p>';
+      }
       return '<div class="ko-skel"></div><div class="ko-skel"></div><div class="ko-skel"></div>';
     }
     // Free first, then list order. Everyone stays selectable — a busy
@@ -689,6 +703,18 @@
   function bind() {
     const $ = (id) => panel.body.querySelector(id);
 
+    // Present only while an error is showing and the automatic retries are
+    // spent. Resets the counter, so the button works more than once.
+    const retry = $("#ko-retry");
+    if (retry) {
+      retry.addEventListener("click", () => {
+        state.tries = 0;
+        state.error = null;
+        render();
+        load();
+      });
+    }
+
     $("#ko-date").addEventListener("change", (e) => { state.date = e.target.value; load(); });
     $("#ko-time").addEventListener("change", (e) => { state.time = e.target.value; load(); });
     $("#ko-dur").addEventListener("change", (e) => { state.duration = Number(e.target.value); load(); });
@@ -872,9 +898,24 @@
       if (!res || res.ok === false) {
         state.error = (res && res.error) || "Couldn't read calendars.";
         state.board = null;
+        // A failure used to end here, with no timer and no button, so the
+        // panel sat on an error until the BD happened to change the date.
+        // The commonest cause is Apps Script cold-starting, which fixes
+        // itself in seconds — so retry a couple of times, spaced out, then
+        // stop and leave a button rather than hammering a backend that is
+        // genuinely down.
+        state.tries = (state.tries || 0) + 1;
+        if (state.tries <= 2) {
+          state.retryIn = state.tries * 8;
+          refreshTimer = setTimeout(load, state.retryIn * 1000);
+        } else {
+          state.retryIn = 0;
+        }
         render();
         return;
       }
+      state.tries = 0;
+      state.retryIn = 0;
 
       const first = !state.board;
       state.board = res;

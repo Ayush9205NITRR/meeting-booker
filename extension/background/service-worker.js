@@ -325,7 +325,16 @@ async function handleRequest(action, payload) {
         // Fall back here rather than sending the content script round
         // again: these two are independent, so they go together and cost
         // one round trip's wall time instead of two.
-        if (result) await chrome.storage.local.set({ bootstrapUnsupported: true });
+        //
+        // Only "unknown action" means the deployment lacks this endpoint.
+        // Latching on ANY failure was self-reinforcing: one slow backend
+        // timed the bootstrap out, the flag stuck, and every contact page
+        // afterwards made two calls instead of one — which made the next
+        // timeout likelier, not less likely, and nothing but a successful
+        // bootstrap could clear a flag that was now preventing one.
+        if (result && /unknown action/i.test(result.error || "")) {
+          await chrome.storage.local.set({ bootstrapUnsupported: true });
+        }
 
         const [pipelines, contact] = await Promise.all([
           freshPipes
